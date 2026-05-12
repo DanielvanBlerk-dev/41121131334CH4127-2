@@ -1,6 +1,8 @@
 import { Redis } from '@upstash/redis';
 import { verifyAdmin } from './_verifyAdmin.js';
 import { sanitizeString } from './_sanitize.js';
+import { getIp } from './_rateLimit.js';
+import { auditLog } from './_auditLog.js';
 
 const redis = new Redis({
   url:   process.env.UPSTASH_REDIS_REST_URL,
@@ -13,7 +15,12 @@ function isValidString(str) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  if (!verifyAdmin(req)) return res.status(401).json({ error: 'Unauthorized' });
+
+  const admin = verifyAdmin(req);
+  if (!admin) {
+    await auditLog({ action: 'unauthorised', ip: getIp(req), detail: { endpoint: 'add-painting' } });
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
 
   const { title, medium, price, sold = false, imgData = null } = req.body || {};
 
@@ -34,6 +41,13 @@ export default async function handler(req, res) {
       svg:     null,
     });
     await redis.set('artworks', artworks);
+
+    await auditLog({
+      action: 'add_painting',
+      ip:     getIp(req),
+      detail: { id, title: sanitizeString(title), price },
+    });
+
     return res.status(200).json({ success: true, id });
   } catch (err) {
     console.error('add-painting error:', err);

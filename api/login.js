@@ -1,23 +1,37 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { getIp, checkRateLimit, recordFailedAttempt, clearAttempts } from './_rateLimit.js';
+import { auditLog } from './_auditLog.js';
 
 /**
  * POST /api/login
  * Body: { password: string }
  *
+ * Rate-limited: 5 failed attempts → 15-minute lockout per IP.
+ * Logs every attempt (success and failure) to the audit log.
+ *
  * Required Vercel env vars:
  *   ADMIN_PASSWORD_HASH  — bcrypt hash of your admin password
- *                          Generate with: node -e "require('bcryptjs').hash('yourpassword',12).then(console.log)"
- *   ADMIN_JWT_SECRET     — any long random string (e.g. from `openssl rand -hex 32`)
- *
- * Returns: { token } on success — store this in sessionStorage and send as
- *          Authorization: Bearer <token> on all admin API calls.
+ *   ADMIN_JWT_SECRET     — long random secret string
  */
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const ip = getIp(req);
+
+  // ── Rate limit check ──────────────────────────────────────────────────
+  const { limited, retryAfterSecs } = await checkRateLimit(ip, 'login');
+  if (limited) {
+    const mins = Math.ceil(retryAfterSecs / 60);
+    await auditLog({ action: 'login_blocked', ip });
+    return res.status(429).json({
+      error: `Too many failed attempts. Try again in ${mins} minute${mins !== 1 ? 's' : ''}.`,
+    });
+  }
+
+  // ── Input validation ──────────────────────────────────────────────────
   const { password } = req.body || {};
   if (!password || typeof password !== 'string') {
     return res.status(400).json({ error: 'Missing password' });
@@ -31,11 +45,27 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Server misconfigured' });
   }
 
+  // ── Password check ────────────────────────────────────────────────────
   const valid = await bcrypt.compare(password, hash);
+
   if (!valid) {
-    // Constant-time rejection prevents timing attacks
-    return res.status(401).json({ error: 'Invalid password' });
+    const result = await recordFailedAttempt(ip, 'login');
+    await auditLog({ action: 'login_failed', ip, detail: { locked: result.locked } });
+
+    if (result.locked) {
+      return res.status(429).json({
+        error: 'Too many failed attempts. Your IP has been locked out for 15 minutes.',
+      });
+    }
+
+    return res.status(401).json({
+      error: `Invalid password. ${result.attemptsRemaining} attempt${result.attemptsRemaining !== 1 ? 's' : ''} remaining before lockout.`,
+    });
   }
+
+  // ── Success ───────────────────────────────────────────────────────────
+  await clearAttempts(ip, 'login');
+  await auditLog({ action: 'login_success', ip });
 
   const token = jwt.sign(
     { role: 'admin' },

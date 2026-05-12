@@ -399,24 +399,83 @@ function showPaymentError(msg) {
   errEl.style.display = 'block';
 }
 
+/* ─── FORM FIELD HELPERS ──────────────────────────────────────────────────── */
+function fieldVal(id)        { return el(id).value.trim(); }
+function hasHtml(str)        { return /[<>]/.test(str); }
+function validPhone(str)     { return /^[0-9+\s\-]{6,20}$/.test(str); }
+function validPostcode(str)  { return /^[0-9]{4,10}$/.test(str); }
+function validEmail(str)     { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str); }
+
+/**
+ * Validates and returns sanitised form values, or null on failure.
+ * Call before tokenising with Square AND again before sending to the API.
+ */
 function validateForm() {
-  const fields = [
-    ['first-name', 'First name'], ['last-name', 'Last name'],
-    ['email',      'Email'],      ['address',   'Address'],
-    ['city',       'City'],       ['postcode',  'Postcode'],
+  // Trim + HTML-tag check on all text fields
+  const textFields = [
+    ['first-name', 'First name'],
+    ['last-name',  'Last name'],
+    ['address',    'Street address'],
+    ['city',       'City'],
+    ['state',      'State'],
+    ['country',    'Country'],
   ];
-  for (const [id, label] of fields) {
-    if (!el(id).value.trim()) { showPaymentError('Please enter your ' + label + '.'); return false; }
+
+  for (const [id, label] of textFields) {
+    const val = fieldVal(id);
+    if (!val) {
+      showPaymentError('Please enter your ' + label + '.'); return null;
+    }
+    if (hasHtml(val)) {
+      showPaymentError(label + ' must not contain HTML characters.'); return null;
+    }
   }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(el('email').value)) {
-    showPaymentError('Please enter a valid email address.'); return false;
+
+  // Email
+  const email = fieldVal('email');
+  if (!email) {
+    showPaymentError('Please enter your email address.'); return null;
   }
-  return true;
+  if (hasHtml(email) || !validEmail(email)) {
+    showPaymentError('Please enter a valid email address.'); return null;
+  }
+
+  // Phone — optional but validated if provided
+  const phone = fieldVal('phone');
+  if (phone && !validPhone(phone)) {
+    showPaymentError('Please enter a valid phone number (digits, spaces, + and - only).'); return null;
+  }
+
+  // Postcode — numeric only
+  const postcode = fieldVal('postcode');
+  if (!postcode) {
+    showPaymentError('Please enter your postcode.'); return null;
+  }
+  if (!validPostcode(postcode)) {
+    showPaymentError('Postcode must be numeric only.'); return null;
+  }
+
+  // Return all trimmed values so processPayment doesn't re-read the DOM
+  return {
+    firstName: fieldVal('first-name'),
+    lastName:  fieldVal('last-name'),
+    email,
+    phone,
+    address:   fieldVal('address'),
+    city:      fieldVal('city'),
+    state:     fieldVal('state'),
+    postcode,
+    country:   fieldVal('country'),
+  };
 }
 
 async function handlePayment() {
   el('payment-error').style.display = 'none';
-  if (!validateForm()) return;
+
+  // First validation pass — stops before touching Square if fields are bad
+  const fields = validateForm();
+  if (!fields) return;
+
   if (!squareCard) { showPaymentError('Payment form is not ready. Please try again.'); return; }
 
   const btn = el('pay-btn');
@@ -425,7 +484,7 @@ async function handlePayment() {
   try {
     const result = await squareCard.tokenize();
     if (result.status === 'OK') {
-      await processPayment(result.token);
+      await processPayment(result.token, fields);
     } else {
       const msg = (result.errors || []).map(e => e.message).join(' ') || 'Card error — please check your details.';
       showPaymentError(msg);
@@ -438,9 +497,18 @@ async function handlePayment() {
   }
 }
 
-async function processPayment(sourceId) {
+async function processPayment(sourceId, fields) {
+  // Second validation pass — re-validate before the network call
+  // in case anything changed between tokenise and send.
+  const recheck = validateForm();
+  if (!recheck) {
+    const btn = el('pay-btn');
+    btn.disabled = false; btn.textContent = 'Complete Purchase';
+    return;
+  }
+
   const total    = cart.reduce((s, i) => s + i.price, 0);
-  const amountIn = Math.round(total * 100); // Square uses smallest currency unit (cents)
+  const amountIn = Math.round(total * 100); // Square expects cents
 
   try {
     const data = await apiFetch('/api/create-payment', {
@@ -449,18 +517,19 @@ async function processPayment(sourceId) {
         sourceId,
         amount:    amountIn,
         currency:  'AUD',
-        email:     el('email').value.trim(),
-        firstName: el('first-name').value.trim(),
-        lastName:  el('last-name').value.trim(),
-        address:   el('address').value.trim(),
-        city:      el('city').value.trim(),
-        postcode:  el('postcode').value.trim(),
-        phone:     el('phone').value.trim(),
+        email:     recheck.email,
+        firstName: recheck.firstName,
+        lastName:  recheck.lastName,
+        address:   recheck.address,
+        city:      recheck.city,
+        state:     recheck.state,
+        postcode:  recheck.postcode,
+        phone:     recheck.phone,
+        country:   recheck.country,
         items:     cart.map(a => ({ id: a.id, title: a.title, price: a.price })),
       }),
     });
 
-    // Refresh gallery so sold status is up to date
     await loadArtworks();
     cart = [];
     updateCartUI();
