@@ -396,3 +396,20 @@ footer {
   .form-row { grid-template-columns: 1fr; }
   footer { flex-direction: column; gap: 1rem; text-align: center; }
 }
+
+/* ─── CSP-CLEAN UTILITY CLASSES (replaces all inline styles) ─────────────── */
+.admin-bar-label    { color: rgba(255,255,255,0.5); }
+.admin-bar-actions  { display: flex; gap: 10px; }
+
+.about-eyebrow      { text-align: center; }
+
+.upload-icon        { font-size: 24px; margin-bottom: 8px; color: var(--gold); }
+.upload-hint        { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.upload-types       { font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+.form-group-inline  { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.checkbox-label     { margin: 0; text-transform: none; letter-spacing: 0; font-size: 12px; }
+
+.add-error          { color: #c0392b; font-size: 11px; margin-top: 8px; min-height: 16px; }
+
+.file-input-hidden  { display: none; }

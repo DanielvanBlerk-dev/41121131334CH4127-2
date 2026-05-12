@@ -5,11 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Atelier — Original Fine Art</title>
 
-  <!--
-    Content-Security-Policy is set via HTTP headers in vercel.json.
-    The meta tag below is a fallback only (headers take precedence).
-  -->
-
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -31,9 +26,9 @@
   <div class="admin-bar" id="admin-bar" role="banner" aria-label="Admin toolbar">
     <div class="admin-bar-left">
       <span class="admin-badge">Admin</span>
-      <span style="color:rgba(255,255,255,0.5);">Viewing as owner</span>
+      <span class="admin-bar-label">Viewing as owner</span>
     </div>
-    <div style="display:flex;gap:10px;">
+    <div class="admin-bar-actions">
       <button class="admin-btn" id="admin-add-btn">+ Add painting</button>
       <button class="admin-btn danger" id="admin-logout-btn">Log out</button>
     </div>
@@ -79,7 +74,7 @@
   <!-- ── ABOUT ─────────────────────────────────────────────────────────── -->
   <section class="section about-section" id="about" aria-label="About the artist">
     <div class="about-inner">
-      <p class="hero-eyebrow" style="text-align:center;">The Artist</p>
+      <p class="hero-eyebrow about-eyebrow">The Artist</p>
       <h2 class="about-title">A studio practice<br><em>rooted in observation.</em></h2>
       <p class="about-body">Each painting begins with weeks of looking — at light, at form, at the particular quality of stillness in a moment. Works are produced in small series and sold as unique originals. Certificates of authenticity are included with every purchase.</p>
       <p class="about-location">Studio — Townsville, QLD, Australia</p>
@@ -235,11 +230,11 @@
     </div>
     <div class="add-panel-body">
       <div class="img-upload-area" id="img-upload-area" role="button" tabindex="0" aria-label="Upload painting image">
-        <input type="file" id="img-file" accept="image/*" style="display:none;">
+        <input type="file" id="img-file" accept="image/*" class="file-input-hidden">
         <div id="img-placeholder">
-          <div style="font-size:24px;margin-bottom:8px;color:var(--gold);">+</div>
-          <div style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);">Click to upload image</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:4px;">JPG, PNG, WEBP</div>
+          <div class="upload-icon">+</div>
+          <div class="upload-hint">Click to upload image</div>
+          <div class="upload-types">JPG, PNG, WEBP</div>
         </div>
         <img id="img-preview-el" class="img-preview" alt="Preview of uploaded painting">
       </div>
@@ -255,11 +250,11 @@
         <label for="new-price">Price (AUD)</label>
         <input type="number" id="new-price" placeholder="1200" min="0">
       </div>
-      <div class="form-group" style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+      <div class="form-group-inline">
         <input type="checkbox" id="new-sold">
-        <label for="new-sold" style="margin:0;text-transform:none;letter-spacing:0;font-size:12px;">Mark as sold</label>
+        <label for="new-sold" class="checkbox-label">Mark as sold</label>
       </div>
-      <p id="add-error" style="color:#c0392b;font-size:11px;margin-top:8px;min-height:16px;" role="alert"></p>
+      <p id="add-error" class="add-error" role="alert"></p>
     </div>
     <div class="add-panel-footer">
       <button class="save-btn" id="save-painting-btn">Save painting to gallery</button>
