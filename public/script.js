@@ -472,7 +472,6 @@ function validateForm() {
 async function handlePayment() {
   el('payment-error').style.display = 'none';
 
-  // First validation pass — stops before touching Square if fields are bad
   const fields = validateForm();
   if (!fields) return;
 
@@ -486,20 +485,18 @@ async function handlePayment() {
     if (result.status === 'OK') {
       await processPayment(result.token, fields);
     } else {
-      const msg = (result.errors || []).map(e => e.message).join(' ') || 'Card error — please check your details.';
-      showPaymentError(msg);
+      const code = result.errors?.[0]?.code || '';
+      showPaymentError(safeCardError(code));
+      await squareCard.clear?.();
       btn.disabled = false; btn.textContent = 'Complete Purchase';
     }
   } catch (e) {
     showPaymentError('An unexpected error occurred. Please try again.');
-    console.error(e);
     btn.disabled = false; btn.textContent = 'Complete Purchase';
   }
 }
 
 async function processPayment(sourceId, fields) {
-  // Second validation pass — re-validate before the network call
-  // in case anything changed between tokenise and send.
   const recheck = validateForm();
   if (!recheck) {
     const btn = el('pay-btn');
@@ -507,15 +504,13 @@ async function processPayment(sourceId, fields) {
     return;
   }
 
-  const total    = cart.reduce((s, i) => s + i.price, 0);
-  const amountIn = Math.round(total * 100); // Square expects cents
-
   try {
+    // Send item IDs only — server computes prices from Redis.
+    // Never send client-computed amounts; the server ignores them anyway.
     const data = await apiFetch('/api/create-payment', {
       method: 'POST',
       body: JSON.stringify({
         sourceId,
-        amount:    amountIn,
         currency:  'AUD',
         email:     recheck.email,
         firstName: recheck.firstName,
@@ -526,20 +521,51 @@ async function processPayment(sourceId, fields) {
         postcode:  recheck.postcode,
         phone:     recheck.phone,
         country:   recheck.country,
-        items:     cart.map(a => ({ id: a.id, title: a.title, price: a.price })),
+        items:     cart.map(a => ({ id: a.id })),
       }),
     });
 
+    await squareCard.clear?.();
     await loadArtworks();
     cart = [];
     updateCartUI();
     showSuccess(data.orderId);
+
   } catch (e) {
-    showPaymentError('Payment failed. Please try again or use a different card.');
-    console.error(e);
+    const msg = isSafeServerMessage(e.message)
+      ? e.message
+      : 'Payment could not be processed. Please check your card details and try again.';
+    showPaymentError(msg);
+    await squareCard.clear?.();
     const btn = el('pay-btn');
     btn.disabled = false; btn.textContent = 'Complete Purchase';
   }
+}
+
+function safeCardError(code) {
+  const map = {
+    'CVV_FAILURE':             'The security code (CVV) you entered is incorrect.',
+    'EXPIRATION_FAILURE':      'The card expiry date is invalid or in the past.',
+    'INVALID_CARD':            'Your card details appear to be invalid. Please check and try again.',
+    'CARD_DECLINED':           'Your card was declined. Please try a different card.',
+    'INSUFFICIENT_FUNDS':      'Your card has insufficient funds.',
+    'INVALID_EXPIRATION':      'The expiry date you entered is invalid.',
+    'PAN_FAILURE':             'The card number you entered appears to be invalid.',
+    'GENERIC_DECLINE':         'Your card was declined. Please try a different card.',
+  };
+  return map[code] || 'Please check your card details and try again.';
+}
+
+function isSafeServerMessage(msg) {
+  if (!msg || typeof msg !== 'string') return false;
+  const safe = [
+    'Too many payment attempts',
+    'already sold',
+    'Invalid or incomplete form data',
+    'An unexpected error occurred',
+    'Payment could not be processed',
+  ];
+  return safe.some(s => msg.includes(s));
 }
 
 function showSuccess(orderId) {

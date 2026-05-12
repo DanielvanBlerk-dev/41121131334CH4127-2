@@ -5,12 +5,22 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
-const MAX_ATTEMPTS  = 5;           // failed attempts before lockout
-const COOLDOWN_SECS = 15 * 60;    // 15 minutes in seconds
-const WINDOW_SECS   = 60 * 60;    // sliding window to track attempts (1 hour)
+/* ─── PER-ACTION LIMITS ───────────────────────────────────────────────────── */
+const LIMITS = {
+  login: {
+    maxAttempts:  5,
+    cooldownSecs: 15 * 60,   // 15 minutes
+    windowSecs:   60 * 60,   // 1 hour sliding window
+  },
+  payment: {
+    maxAttempts:  3,
+    cooldownSecs: 10 * 60,   // 10 minutes
+    windowSecs:   10 * 60,   // 10 minute window
+  },
+};
 
 /**
- * Returns the client IP from common Vercel / proxy headers.
+ * Returns the client IP from Vercel / common proxy headers.
  */
 export function getIp(req) {
   return (
@@ -22,48 +32,46 @@ export function getIp(req) {
 }
 
 /**
- * Checks whether this IP is currently locked out.
- * Returns { limited: true, retryAfterSecs } if locked, or { limited: false }.
+ * Checks whether this IP is currently locked out for the given action.
+ * Returns { limited: true, retryAfterSecs } or { limited: false }.
  */
 export async function checkRateLimit(ip, action = 'login') {
   const lockKey = `rl:lock:${action}:${ip}`;
   const locked  = await redis.get(lockKey);
-
   if (locked) {
     const ttl = await redis.ttl(lockKey);
-    return { limited: true, retryAfterSecs: ttl };
+    return { limited: true, retryAfterSecs: Math.max(ttl, 0) };
   }
-
   return { limited: false };
 }
 
 /**
- * Records a failed attempt for this IP.
- * If MAX_ATTEMPTS is reached, sets a cooldown lock and resets the counter.
- * Returns { locked: true } if this attempt triggered a lockout.
+ * Records a failed attempt for this IP + action.
+ * Triggers a lockout once maxAttempts is reached.
+ * Returns { locked: true } if lockout was just triggered,
+ *         { locked: false, attemptsRemaining: N } otherwise.
  */
 export async function recordFailedAttempt(ip, action = 'login') {
+  const cfg = LIMITS[action] || LIMITS.login;
   const attemptsKey = `rl:attempts:${action}:${ip}`;
   const lockKey     = `rl:lock:${action}:${ip}`;
 
-  // Increment attempt counter; set expiry on first write
   const attempts = await redis.incr(attemptsKey);
   if (attempts === 1) {
-    await redis.expire(attemptsKey, WINDOW_SECS);
+    await redis.expire(attemptsKey, cfg.windowSecs);
   }
 
-  if (attempts >= MAX_ATTEMPTS) {
-    // Lock this IP for the cooldown period
-    await redis.set(lockKey, '1', { ex: COOLDOWN_SECS });
+  if (attempts >= cfg.maxAttempts) {
+    await redis.set(lockKey, '1', { ex: cfg.cooldownSecs });
     await redis.del(attemptsKey);
     return { locked: true };
   }
 
-  return { locked: false, attemptsRemaining: MAX_ATTEMPTS - attempts };
+  return { locked: false, attemptsRemaining: cfg.maxAttempts - attempts };
 }
 
 /**
- * Clears the attempt counter for this IP on successful auth.
+ * Clears the attempt counter for this IP + action on success.
  */
 export async function clearAttempts(ip, action = 'login') {
   await redis.del(`rl:attempts:${action}:${ip}`);
