@@ -11,6 +11,6 @@
  * ─────────────────────────────────────────────────────────────────
  */
 window.SQUARE_CONFIG = {
-  applicationId: 'sandbox-sq0idb-REPLACE_WITH_YOUR_APP_ID',
-  locationId:    'REPLACE_WITH_YOUR_LOCATION_ID',
+  applicationId: 'sandbox-sq0idb-pq2qoInxpOga0kn0KV3yXw',
+  locationId:    'LC3ZR7GEG7Z35',
 };
