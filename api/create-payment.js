@@ -114,7 +114,7 @@ export default async function handler(req, res) {
     const squareRes = await fetch('https://connect.squareup.com/v2/payments', {
       method: 'POST',
       headers: {
-        'Square-Version': '2024-01-18',
+        'Square-Version': '2024-10-17',
         'Content-Type':   'application/json',
         'Authorization':  `Bearer ${accessToken}`,
       },
