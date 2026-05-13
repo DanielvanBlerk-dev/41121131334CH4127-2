@@ -11,6 +11,6 @@
  * ─────────────────────────────────────────────────────────────────
  */
 window.SQUARE_CONFIG = {
-  applicationId: 'sq0idp-eSDi7naszrDzviGwbx4wtQ',
-  locationId:    'L5TXAG2ZWH69K',
+  applicationId: 'sq0idp-CGOw-JvrZucxobbRG5oJRQ',
+  locationId:    'LVH5A1HSXN4GA',
 };
