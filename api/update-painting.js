@@ -3,6 +3,8 @@ import { verifyAdmin } from './_verifyAdmin.js';
 import { sanitizeString } from './_sanitize.js';
 import { getIp } from './_rateLimit.js';
 import { auditLog } from './_auditLog.js';
+import { checkCsrf } from './_csrf.js';
+import { checkBodySize } from './_bodyLimit.js';
 
 const redis = new Redis({
   url:   process.env.UPSTASH_REDIS_REST_URL,
@@ -16,10 +18,20 @@ function isValidString(str) {
 export default async function handler(req, res) {
   if (req.method !== 'PUT') return res.status(405).json({ error: 'Method not allowed' });
 
+  // ── Body size limit (5mb — may include updated image) ─────────────────
+  const size = checkBodySize(req, '5mb');
+  if (!size.ok) return res.status(413).json({ error: size.error });
+
   const admin = verifyAdmin(req);
   if (!admin) {
     await auditLog({ action: 'unauthorised', ip: getIp(req), detail: { endpoint: 'update-painting' } });
     return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const csrf = checkCsrf(req);
+  if (!csrf.ok) {
+    await auditLog({ action: 'csrf_rejected', ip: getIp(req), detail: { endpoint: 'update-painting', reason: csrf.reason } });
+    return res.status(403).json({ error: 'Forbidden' });
   }
 
   const { id, title, medium, price, sold, imgData } = req.body || {};

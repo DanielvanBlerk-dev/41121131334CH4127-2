@@ -2,6 +2,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { getIp, checkRateLimit, recordFailedAttempt, clearAttempts } from './_rateLimit.js';
 import { auditLog } from './_auditLog.js';
+import { checkCsrf } from './_csrf.js';
+import { checkBodySize } from './_bodyLimit.js';
 
 /**
  * POST /api/login
@@ -20,6 +22,17 @@ export default async function handler(req, res) {
   }
 
   const ip = getIp(req);
+
+  // ── Body size limit ───────────────────────────────────────────────────
+  const size = checkBodySize(req, '1kb');
+  if (!size.ok) return res.status(413).json({ error: size.error });
+
+  // ── CSRF check ────────────────────────────────────────────────────────
+  const csrf = checkCsrf(req);
+  if (!csrf.ok) {
+    await auditLog({ action: 'csrf_rejected', ip, detail: { endpoint: 'login', reason: csrf.reason } });
+    return res.status(403).json({ error: 'Forbidden' });
+  }
 
   // ── Rate limit check ──────────────────────────────────────────────────
   const { limited, retryAfterSecs } = await checkRateLimit(ip, 'login');

@@ -21,7 +21,11 @@ let squarePayments  = null;
 /* ─── API HELPERS ─────────────────────────────────────────────────────────── */
 async function apiFetch(path, options = {}) {
   const token = getToken();
-  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+  const headers = {
+    'Content-Type':    'application/json',
+    'X-Requested-With': 'XMLHttpRequest',  // CSRF protection — required by all mutating endpoints
+    ...(options.headers || {}),
+  };
   if (token) headers['Authorization'] = 'Bearer ' + token;
 
   const res = await fetch(path, { ...options, headers });

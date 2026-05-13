@@ -1,6 +1,8 @@
 import { Redis } from '@upstash/redis';
 import { getIp, checkRateLimit, recordFailedAttempt, clearAttempts } from './_rateLimit.js';
 import { auditLog } from './_auditLog.js';
+import { checkCsrf } from './_csrf.js';
+import { checkBodySize } from './_bodyLimit.js';
 
 const redis = new Redis({
   url:   process.env.UPSTASH_REDIS_REST_URL,
@@ -47,6 +49,17 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const ip = getIp(req);
+
+  // ── Body size limit ───────────────────────────────────────────────────
+  const size = checkBodySize(req, '10kb');
+  if (!size.ok) return res.status(413).json({ success: false, error: size.error });
+
+  // ── CSRF check ────────────────────────────────────────────────────────
+  const csrf = checkCsrf(req);
+  if (!csrf.ok) {
+    await auditLog({ action: 'csrf_rejected', ip, detail: { endpoint: 'create-payment', reason: csrf.reason } });
+    return res.status(403).json({ success: false, error: 'Forbidden' });
+  }
 
   // ── Rate limit: max 3 payment attempts per IP per 10 min ──────────────
   const { limited, retryAfterSecs } = await checkRateLimit(ip, 'payment');
