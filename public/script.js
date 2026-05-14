@@ -290,7 +290,7 @@ function activateAdminMode() {
 /* ─── ADMIN ACTIONS ───────────────────────────────────────────────────────── */
 async function toggleSold(id) {
   try {
-    await apiFetch('/api/toggle-sold', {
+    await apiFetch('/api/paintings', {
       method: 'PATCH',
       body:   JSON.stringify({ id }),
     });
@@ -317,7 +317,7 @@ async function executeDeletion() {
   el('confirm-overlay').classList.remove('open');
 
   try {
-    await apiFetch('/api/delete-painting', {
+    await apiFetch('/api/paintings', {
       method: 'DELETE',
       body:   JSON.stringify({ id }),
     });
@@ -386,7 +386,7 @@ async function saveNewPainting() {
   btn.disabled = true; btn.textContent = 'Saving…';
 
   try {
-    const data = await apiFetch('/api/add-painting', {
+    const data = await apiFetch('/api/paintings', {
       method: 'POST',
       body:   JSON.stringify({
         title, medium, price, category, sold,
