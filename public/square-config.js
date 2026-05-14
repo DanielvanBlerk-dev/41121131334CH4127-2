@@ -10,6 +10,6 @@
  * ─────────────────────────────────────────────────────────────────
  */
 window.SQUARE_CONFIG = {
-  applicationId: 'PASTE_YOUR_PRODUCTION_APPLICATION_ID_HERE',
-  locationId:    'PASTE_YOUR_PRODUCTION_LOCATION_ID_HERE',
+  applicationId: 'sq0idp-CGOw-JvrZucxobbRG5oJRQ',
+  locationId:    'LVH5A1HSXN4GA',
 };
