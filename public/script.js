@@ -92,11 +92,12 @@ async function handleArtistPhotoUpload(e) {
   const reader = new FileReader();
   reader.onload = async ev => {
     try {
-      await apiFetch('/api/update-artist-photo', {
+      const data = await apiFetch('/api/update-artist-photo', {
         method: 'POST',
         body:   JSON.stringify({ imgData: ev.target.result }),
       });
-      artistPhoto = ev.target.result;
+      // Server returns the Blob CDN URL — use that directly
+      artistPhoto = data.imgUrl || ev.target.result;
       renderArtistPhoto();
     } catch (err) {
       alert('Failed to upload photo. Please try again.');
@@ -104,7 +105,6 @@ async function handleArtistPhotoUpload(e) {
     } finally {
       btn.textContent = 'Change photo';
       btn.disabled    = false;
-      // Reset file input so same file can be re-selected
       el('artist-photo-file').value = '';
     }
   };
@@ -131,12 +131,14 @@ function buildCard(art) {
   card.className = 'artwork-card';
   card.id = 'card-' + art.id;
 
-  // Image area
+  // Image area — prefer Blob CDN URL, fall back to legacy base64, then SVG placeholder
   const imgWrap = document.createElement('div');
   imgWrap.className = 'artwork-img';
-  if (art.imgData) {
+  if (art.imgUrl || art.imgData) {
     const img = document.createElement('img');
-    img.src = art.imgData; img.alt = art.title;
+    img.src = art.imgUrl || art.imgData;
+    img.alt = art.title;
+    img.loading = 'lazy'; // native lazy loading — images load as they scroll into view
     imgWrap.appendChild(img);
   } else if (art.svg) {
     imgWrap.innerHTML = art.svg;
@@ -446,8 +448,9 @@ function updateCartUI() {
     const item   = document.createElement('div'); item.className = 'cart-item';
     const thumb  = document.createElement('div'); thumb.className = 'cart-item-thumb';
 
-    if (art.imgData) {
-      const img = document.createElement('img'); img.src = art.imgData; img.alt = art.title;
+    if (art.imgUrl || art.imgData) {
+      const img = document.createElement('img');
+      img.src = art.imgUrl || art.imgData; img.alt = art.title;
       thumb.appendChild(img);
     } else if (art.svg) { thumb.innerHTML = art.svg; }
 
