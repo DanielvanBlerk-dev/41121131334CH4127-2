@@ -96,6 +96,8 @@ nav {
 }
 .hero-inner {
   max-width: 700px;
+  margin: 0 auto;
+  text-align: center;
 }
 .hero-eyebrow {
   font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
@@ -115,7 +117,7 @@ nav {
 }
 .hero-body {
   color: var(--muted); line-height: 1.9; font-size: 14px;
-  max-width: 60ch; margin-bottom: 1rem;
+  max-width: 60ch; margin: 0 auto 1rem;
 }
 .hero-body:last-child { margin-bottom: 0; }
 
@@ -133,6 +135,7 @@ nav {
 
 /* ─── ABOUT ───────────────────────────────────────────────────────────────── */
 .about-section { border-top: 1px solid var(--border); }
+.about-section .section-header { text-align: center; }
 .about-layout {
   display: grid;
   grid-template-columns: 340px 1fr;
@@ -169,7 +172,9 @@ nav {
   letter-spacing: 0.04em; text-transform: uppercase;
   margin-bottom: 1.5rem; padding-bottom: 1rem;
   border-bottom: 1px solid var(--border);
+  text-align: center;
 }
+.commissions-section .section-header { text-align: center; }
 .gallery-section-body {
   color: var(--muted); line-height: 1.9; font-size: 14px;
   max-width: 70ch; margin-bottom: 1rem;
