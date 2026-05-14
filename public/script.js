@@ -445,25 +445,22 @@ async function calculatePostage() {
     return;
   }
 
-  // Collect shipping dimensions from all items in cart
-  // Use the largest single item's dimensions for the postage query
-  // (Australia Post calculates per parcel, not combined)
-  if (cart.length === 0) {
-    resultEl.innerHTML = '<p class="postage-error">No items in cart.</p>';
+  // Find the item with the largest dimensions — drives the postage cost.
+  // Gracefully handle artworks that predate the shipping fields.
+  const itemsWithShipping = cart.filter(a => a.shipping?.weight > 0);
+
+  if (itemsWithShipping.length === 0) {
+    resultEl.innerHTML = '<p class="postage-error">Shipping details are not yet available for this item. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a quote.</p>';
+    btn.disabled    = false;
+    btn.textContent = 'Calculate';
     return;
   }
 
-  // Find the heaviest item — it drives the postage cost
-  const heaviest = cart.reduce((max, art) => {
-    const w = art.shipping?.weight || 0;
-    return w > (max.shipping?.weight || 0) ? art : max;
-  }, cart[0]);
+  const heaviest = itemsWithShipping.reduce((max, art) =>
+    art.shipping.weight > max.shipping.weight ? art : max
+  , itemsWithShipping[0]);
 
   const shipping = heaviest.shipping;
-  if (!shipping || !shipping.weight) {
-    resultEl.innerHTML = '<p class="postage-error">Shipping details unavailable for this item. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a quote.</p>';
-    return;
-  }
 
   btn.disabled    = true;
   btn.textContent = 'Calculating…';
