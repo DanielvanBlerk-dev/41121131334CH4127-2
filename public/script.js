@@ -251,7 +251,8 @@ async function executeDeletion() {
 function openAddPanel() {
   el('add-panel').classList.add('open');
   document.body.style.overflow = 'hidden';
-  ['new-title', 'new-medium', 'new-price'].forEach(id => el(id).value = '');
+  ['new-title', 'new-medium', 'new-price',
+   'new-weight', 'new-length', 'new-width', 'new-height'].forEach(id => el(id).value = '');
   el('new-category').value = 'seascape';
   el('new-sold').checked   = false;
   el('add-error').textContent = '';
@@ -280,14 +281,22 @@ async function saveNewPainting() {
   const title    = el('new-title').value.trim();
   const medium   = el('new-medium').value.trim();
   const priceRaw = el('new-price').value;
-  const category = el('new-category').value;  // 'seascape' or 'figurative'
+  const category = el('new-category').value;
   const sold     = el('new-sold').checked;
+  const weight   = parseFloat(el('new-weight').value);
+  const length   = parseFloat(el('new-length').value);
+  const width    = parseFloat(el('new-width').value);
+  const height   = parseFloat(el('new-height').value);
   const errEl    = el('add-error');
 
   if (!title)  { errEl.textContent = 'Please enter a title.'; return; }
   if (!medium) { errEl.textContent = 'Please enter the medium and dimensions.'; return; }
   const price = parseInt(priceRaw, 10);
   if (!priceRaw || isNaN(price) || price < 0) { errEl.textContent = 'Please enter a valid price.'; return; }
+  if (isNaN(weight) || weight <= 0) { errEl.textContent = 'Please enter the packed weight in kg.'; return; }
+  if (isNaN(length) || length <= 0) { errEl.textContent = 'Please enter the packed length in cm.'; return; }
+  if (isNaN(width)  || width  <= 0) { errEl.textContent = 'Please enter the packed width in cm.'; return; }
+  if (isNaN(height) || height <= 0) { errEl.textContent = 'Please enter the packed height in cm.'; return; }
 
   const btn = el('save-painting-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
@@ -295,7 +304,11 @@ async function saveNewPainting() {
   try {
     const data = await apiFetch('/api/add-painting', {
       method: 'POST',
-      body:   JSON.stringify({ title, medium, price, category, sold, imgData: newImgData || null }),
+      body:   JSON.stringify({
+        title, medium, price, category, sold,
+        weight, length, width, height,
+        imgData: newImgData || null,
+      }),
     });
     await loadArtworks();
     renderGallery();
@@ -305,7 +318,7 @@ async function saveNewPainting() {
       if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 200);
   } catch (e) {
-    errEl.textContent = 'Failed to save painting. Please try again.';
+    errEl.textContent = e.message || 'Failed to save painting. Please try again.';
     console.error(e);
   } finally {
     btn.disabled = false; btn.textContent = 'Save painting to gallery';
@@ -416,10 +429,87 @@ async function openCheckout() {
 }
 function closeCheckout() {
   el('checkout-modal').classList.remove('open');
+  el('postage-result').innerHTML = '';
+  el('buyer-postcode').value = '';
   document.body.style.overflow = '';
 }
 
-/* ─── SQUARE ──────────────────────────────────────────────────────────────── */
+/* ─── POSTAGE CALCULATOR ──────────────────────────────────────────────────── */
+async function calculatePostage() {
+  const postcode   = el('buyer-postcode').value.trim();
+  const resultEl   = el('postage-result');
+  const btn        = el('postage-calc-btn');
+
+  if (!postcode || !/^[0-9]{4}$/.test(postcode)) {
+    resultEl.innerHTML = '<p class="postage-error">Please enter a valid 4-digit postcode.</p>';
+    return;
+  }
+
+  // Collect shipping dimensions from all items in cart
+  // Use the largest single item's dimensions for the postage query
+  // (Australia Post calculates per parcel, not combined)
+  if (cart.length === 0) {
+    resultEl.innerHTML = '<p class="postage-error">No items in cart.</p>';
+    return;
+  }
+
+  // Find the heaviest item — it drives the postage cost
+  const heaviest = cart.reduce((max, art) => {
+    const w = art.shipping?.weight || 0;
+    return w > (max.shipping?.weight || 0) ? art : max;
+  }, cart[0]);
+
+  const shipping = heaviest.shipping;
+  if (!shipping || !shipping.weight) {
+    resultEl.innerHTML = '<p class="postage-error">Shipping details unavailable for this item. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a quote.</p>';
+    return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = 'Calculating…';
+  resultEl.innerHTML = '<p class="postage-loading">Fetching rates from Australia Post…</p>';
+
+  try {
+    const data = await apiFetch('/api/postage', {
+      method: 'POST',
+      body: JSON.stringify({
+        toPostcode: postcode,
+        weight:     shipping.weight,
+        length:     shipping.length,
+        width:      shipping.width,
+        height:     shipping.height,
+      }),
+    });
+
+    if (data.services && data.services.length > 0) {
+      const rows = data.services.map(s => `
+        <div class="postage-service">
+          <span class="postage-service-name">${s.name}</span>
+          <span class="postage-service-details">
+            ${s.deliveryTime ? '<span class="postage-delivery">' + s.deliveryTime + '</span>' : ''}
+            <span class="postage-price">AUD $${s.price.toFixed(2)}</span>
+          </span>
+        </div>
+      `).join('');
+
+      resultEl.innerHTML = `
+        <div class="postage-services">
+          <p class="postage-note">Postage from Airlie Beach (4802) to ${postcode}${cart.length > 1 ? ' — quoted for largest item' : ''}:</p>
+          ${rows}
+          <p class="postage-disclaimer">Postage is calculated per parcel and added to your order total at dispatch. Michael will confirm the final amount before shipping.</p>
+        </div>`;
+    } else {
+      resultEl.innerHTML = `<p class="postage-error">${data.message || 'No postage options found. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a quote.'}</p>`;
+    }
+  } catch (e) {
+    resultEl.innerHTML = '<p class="postage-error">Could not calculate postage. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a shipping quote.</p>';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Calculate';
+  }
+}
+
+
 async function initSquare() {
   if (!window.Square) { showPaymentError('Square failed to load. Check your connection.'); return; }
   try {
@@ -639,6 +729,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Checkout modal
   el('checkout-close-btn').addEventListener('click', closeCheckout);
   el('pay-btn').addEventListener('click', handlePayment);
+  el('postage-calc-btn').addEventListener('click', calculatePostage);
+  el('buyer-postcode').addEventListener('keydown', e => { if (e.key === 'Enter') calculatePostage(); });
 
   // Success
   el('success-continue-btn').addEventListener('click', resetShop);

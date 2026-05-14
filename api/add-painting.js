@@ -35,7 +35,8 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  const { title, medium, price, sold = false, imgData = null, category = 'seascape' } = req.body || {};
+  const { title, medium, price, sold = false, imgData = null, category = 'seascape',
+          weight, length, width, height } = req.body || {};
 
   if (!isValidString(title) || !isValidString(medium) || typeof price !== 'number' || price < 0) {
     return res.status(400).json({ success: false, error: 'Invalid artwork data' });
@@ -44,6 +45,15 @@ export default async function handler(req, res) {
   const validCategories = ['seascape', 'figurative'];
   if (!validCategories.includes(category)) {
     return res.status(400).json({ success: false, error: 'Invalid category. Must be seascape or figurative.' });
+  }
+
+  // ── Shipping dimensions — required ────────────────────────────────────
+  const dimFields = { weight, length, width, height };
+  for (const [key, val] of Object.entries(dimFields)) {
+    const num = parseFloat(val);
+    if (isNaN(num) || num <= 0) {
+      return res.status(400).json({ success: false, error: `Shipping ${key} is required and must be a positive number.` });
+    }
   }
 
   // ── Length caps ───────────────────────────────────────────────────────
@@ -79,6 +89,12 @@ export default async function handler(req, res) {
       sold:    Boolean(sold),
       imgData: imgData || null,
       svg:     null,
+      shipping: {
+        weight: parseFloat(weight),
+        length: parseFloat(length),
+        width:  parseFloat(width),
+        height: parseFloat(height),
+      },
     });
     await redis.set('artworks', artworks);
 

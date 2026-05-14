@@ -525,3 +525,61 @@ footer {
   footer { flex-direction: column; gap: 1rem; text-align: center; }
   .contact-item { flex-direction: column; gap: 0.25rem; }
 }
+
+/* ─── POSTAGE WIDGET ──────────────────────────────────────────────────────── */
+.postage-intro {
+  font-size: 12px; color: var(--muted); margin-bottom: 1rem; line-height: 1.6;
+}
+.postage-input-row {
+  display: flex; align-items: flex-end; gap: 12px; margin-bottom: 1rem;
+}
+.postage-input-group { flex: 0 0 160px; margin-bottom: 0; }
+.postage-calc-btn {
+  padding: 10px 20px; background: var(--ink); color: var(--warm-white);
+  border: none; cursor: pointer; font-family: 'DM Mono', monospace;
+  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  transition: background 0.2s; white-space: nowrap; height: 40px;
+  flex-shrink: 0;
+}
+.postage-calc-btn:hover:not(:disabled) { background: var(--accent); }
+.postage-calc-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.postage-result { margin-top: 0.5rem; }
+.postage-loading { font-size: 11px; color: var(--muted); letter-spacing: 0.06em; }
+.postage-error { font-size: 12px; color: #c0392b; line-height: 1.6; }
+.postage-contact-link { color: #c0392b; text-decoration: underline; }
+.postage-services {
+  background: var(--parchment); border: 1px solid var(--border); padding: 1rem;
+}
+.postage-note {
+  font-size: 11px; color: var(--muted); margin-bottom: 0.75rem;
+  letter-spacing: 0.04em;
+}
+.postage-service {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 0.6rem 0; border-bottom: 1px solid var(--border);
+}
+.postage-service:last-of-type { border-bottom: none; }
+.postage-service-name {
+  font-size: 12px; color: var(--ink); flex: 1;
+}
+.postage-service-details {
+  display: flex; align-items: baseline; gap: 12px; flex-shrink: 0;
+}
+.postage-delivery {
+  font-size: 11px; color: var(--muted); letter-spacing: 0.04em;
+}
+.postage-price {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 16px; color: var(--gold); white-space: nowrap;
+}
+.postage-disclaimer {
+  font-size: 10px; color: var(--muted); margin-top: 0.75rem;
+  line-height: 1.7; letter-spacing: 0.03em;
+  border-top: 1px solid var(--border); padding-top: 0.75rem;
+}
+
+/* ─── SHIPPING SUBHEAD (admin add panel) ──────────────────────────────────── */
+.shipping-subhead {
+  margin-top: 1.5rem; margin-bottom: 1rem;
+  border-bottom-color: var(--border);
+}

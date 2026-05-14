@@ -35,10 +35,20 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  const { id, title, medium, price, sold, imgData } = req.body || {};
+  const { id, title, medium, price, sold, imgData,
+          weight, length, width, height } = req.body || {};
 
   if (!id || !isValidString(title) || !isValidString(medium) || typeof price !== 'number' || price < 0) {
     return res.status(400).json({ success: false, error: 'Invalid artwork data' });
+  }
+
+  // ── Shipping dimensions — required ────────────────────────────────────
+  const dimFields = { weight, length, width, height };
+  for (const [key, val] of Object.entries(dimFields)) {
+    const num = parseFloat(val);
+    if (isNaN(num) || num <= 0) {
+      return res.status(400).json({ success: false, error: `Shipping ${key} is required and must be a positive number.` });
+    }
   }
 
   // ── Length caps ───────────────────────────────────────────────────────
@@ -74,7 +84,13 @@ export default async function handler(req, res) {
       medium:  sanitizeString(medium),
       price,
       sold:    Boolean(sold),
-      imgData: imgData !== undefined ? imgData : artworks[idx].imgData, // safe — validated above
+      imgData: imgData !== undefined ? imgData : artworks[idx].imgData,
+      shipping: {
+        weight: parseFloat(weight),
+        length: parseFloat(length),
+        width:  parseFloat(width),
+        height: parseFloat(height),
+      },
     };
     await redis.set('artworks', artworks);
 
