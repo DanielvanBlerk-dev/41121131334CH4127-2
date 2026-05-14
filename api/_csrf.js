@@ -22,18 +22,24 @@
 const ALLOWED_ORIGINS = (() => {
   const origins = [];
 
-  // Production domain — set ALLOWED_ORIGIN in Vercel env vars
-  // e.g. https://your-site.vercel.app  or  https://yourdomain.com
+  // Explicitly set production domain — set ALLOWED_ORIGIN in Vercel env vars
+  // e.g. https://airliebeachart.com
   if (process.env.ALLOWED_ORIGIN) {
     origins.push(process.env.ALLOWED_ORIGIN.replace(/\/$/, ''));
   }
 
-  // Always allow Vercel preview deployments for your project
+  // Vercel automatically sets VERCEL_PROJECT_PRODUCTION_URL to the production domain
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    origins.push(`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`);
+  }
+
+  // Vercel sets VERCEL_URL to the current deployment URL (preview or production)
   if (process.env.VERCEL_URL) {
     origins.push(`https://${process.env.VERCEL_URL}`);
   }
 
-  return origins;
+  // Deduplicate
+  return [...new Set(origins)];
 })();
 
 /**
