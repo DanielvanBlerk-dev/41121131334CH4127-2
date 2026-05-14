@@ -665,7 +665,7 @@ footer {
 
 /* ─── ORDERS PANEL ────────────────────────────────────────────────────────── */
 .orders-panel {
-  position: fixed; right: 0; top: 0; bottom: 0; z-index: 400;
+  position: fixed; right: 0; top: 0; bottom: 0; z-index: 410;
   width: min(640px, 100vw); background: var(--warm-white);
   border-left: 1px solid var(--border);
   box-shadow: -8px 0 32px rgba(26,22,18,0.12);

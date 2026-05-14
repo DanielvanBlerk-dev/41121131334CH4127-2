@@ -496,7 +496,7 @@ function buildOrderSummary() {
   // Postage line — shows selected service or placeholder
   const postageRow = document.createElement('div'); postageRow.className = 'order-line';
   const postageLabel = document.createElement('span');
-  postageLabel.textContent = selectedPostage ? selectedPostage.name : 'Postage (select above)';
+  postageLabel.textContent = selectedPostage ? selectedPostage.name : 'Postage (select below)';
   if (!selectedPostage) postageLabel.style.color = 'var(--gold)';
   const postagePrice = document.createElement('span');
   postagePrice.textContent = selectedPostage ? 'AUD $' + selectedPostage.price.toFixed(2) : '—';
@@ -548,7 +548,7 @@ async function renderOrders() {
   body.innerHTML = '<div class="orders-loading">Loading orders…</div>';
 
   try {
-    const data = await apiFetch('/api/get-orders');
+    const data   = await apiFetch('/api/get-orders');
     const orders = data.orders || [];
 
     if (orders.length === 0) {
