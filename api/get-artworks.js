@@ -48,9 +48,10 @@ export default async function handler(req, res) {
       artworks = DEFAULT_ARTWORKS;
       await redis.set('artworks', artworks);
     }
-    return res.status(200).json({ artworks });
+    const artistPhoto = await redis.get('artist-photo') || null;
+    return res.status(200).json({ artworks, artistPhoto });
   } catch (err) {
     console.error('get-artworks error:', err);
-    return res.status(200).json({ artworks: DEFAULT_ARTWORKS });
+    return res.status(200).json({ artworks: DEFAULT_ARTWORKS, artistPhoto: null });
   }
 }

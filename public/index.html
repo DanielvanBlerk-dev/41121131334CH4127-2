@@ -201,7 +201,12 @@
     <div class="about-layout">
       <div class="about-photo-wrap">
         <div class="about-photo-placeholder" id="about-photo">
-          <span class="about-photo-label">Artist photo</span>
+          <span class="about-photo-label" id="about-photo-label">Artist photo</span>
+        </div>
+        <div class="about-photo-admin" id="about-photo-admin">
+          <input type="file" id="artist-photo-file" accept="image/*" class="file-input-hidden">
+          <button class="about-photo-upload-btn" id="artist-photo-upload-btn">Change photo</button>
+          <button class="about-photo-remove-btn" id="artist-photo-remove-btn">Remove</button>
         </div>
       </div>
       <div class="about-text">
@@ -411,7 +416,10 @@
       <p class="login-sub">Enter your admin password to manage the gallery.</p>
       <div class="form-group">
         <label for="admin-pw">Password</label>
-        <input type="password" id="admin-pw" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;">
+        <div class="pw-wrap">
+          <input type="password" id="admin-pw" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;">
+          <button type="button" class="pw-toggle" id="pw-toggle-btn" aria-label="Show password">Show</button>
+        </div>
       </div>
       <p class="login-error" id="login-error" role="alert"></p>
       <button class="login-btn" id="login-btn">Sign in</button>

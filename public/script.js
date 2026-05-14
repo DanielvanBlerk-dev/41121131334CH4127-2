@@ -17,7 +17,8 @@ let pendingDeleteId = null;
 let newImgData      = null;
 let squareCard      = null;
 let squarePayments  = null;
-let selectedPostage = null; // { name, price } — set when buyer selects a postage option
+let selectedPostage = null;
+let artistPhoto     = null; // base64 data URI of artist photo, loaded from Redis
 
 /* ─── API HELPERS ─────────────────────────────────────────────────────────── */
 async function apiFetch(path, options = {}) {
@@ -41,14 +42,78 @@ async function apiFetch(path, options = {}) {
 async function loadArtworks() {
   try {
     const data = await apiFetch('/api/get-artworks');
-    artworks = data.artworks || [];
+    artworks    = data.artworks    || [];
+    artistPhoto = data.artistPhoto || null;
+    renderArtistPhoto();
   } catch (e) {
     console.error('Failed to load artworks:', e);
-    artworks = [];
+    artworks    = [];
+    artistPhoto = null;
   }
 }
 
-/* ─── GALLERY — render ────────────────────────────────────────────────────── */
+/* ─── ARTIST PHOTO ────────────────────────────────────────────────────────── */
+function renderArtistPhoto() {
+  const wrap  = el('about-photo');
+  const label = el('about-photo-label');
+  // Clear existing image if any
+  const existing = wrap.querySelector('img');
+  if (existing) existing.remove();
+
+  if (artistPhoto) {
+    const img = document.createElement('img');
+    img.src = artistPhoto;
+    img.alt = 'Michael van Blerk — artist';
+    wrap.appendChild(img);
+    if (label) label.style.display = 'none';
+  } else {
+    if (label) label.style.display = '';
+  }
+}
+
+async function handleArtistPhotoUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const btn = el('artist-photo-upload-btn');
+  btn.textContent = 'Uploading…';
+  btn.disabled    = true;
+
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    try {
+      await apiFetch('/api/update-artist-photo', {
+        method: 'POST',
+        body:   JSON.stringify({ imgData: ev.target.result }),
+      });
+      artistPhoto = ev.target.result;
+      renderArtistPhoto();
+    } catch (err) {
+      alert('Failed to upload photo. Please try again.');
+      console.error(err);
+    } finally {
+      btn.textContent = 'Change photo';
+      btn.disabled    = false;
+      // Reset file input so same file can be re-selected
+      el('artist-photo-file').value = '';
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function removeArtistPhoto() {
+  if (!confirm('Remove the artist photo?')) return;
+  try {
+    await apiFetch('/api/update-artist-photo', { method: 'DELETE', body: JSON.stringify({}) });
+    artistPhoto = null;
+    renderArtistPhoto();
+  } catch (err) {
+    alert('Failed to remove photo. Please try again.');
+    console.error(err);
+  }
+}
+
+
 
 /** Builds a single artwork card element. */
 function buildCard(art) {
@@ -142,7 +207,11 @@ function openLogin() {
   el('login-overlay').classList.add('open');
   setTimeout(() => el('admin-pw').focus(), 200);
 }
-function closeLogin() { el('login-overlay').classList.remove('open'); }
+function closeLogin() {
+  el('login-overlay').classList.remove('open');
+  el('admin-pw').type             = 'password';
+  el('pw-toggle-btn').textContent = 'Show';
+}
 
 async function attemptLogin() {
   const pw    = el('admin-pw').value;
@@ -194,6 +263,7 @@ async function adminLogout() {
   isAdmin = false;
   el('admin-bar').classList.remove('visible');
   el('admin-nav-link').classList.remove('active');
+  el('about-photo-admin').classList.remove('visible');
   renderGallery();
 }
 
@@ -201,6 +271,7 @@ function activateAdminMode() {
   isAdmin = true;
   el('admin-bar').classList.add('visible');
   el('admin-nav-link').classList.add('active');
+  el('about-photo-admin').classList.add('visible');
   renderGallery();
 }
 
@@ -820,13 +891,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   el('login-btn').addEventListener('click', attemptLogin);
   el('login-cancel-btn').addEventListener('click', closeLogin);
   el('admin-pw').addEventListener('keydown', e => { if (e.key === 'Enter') attemptLogin(); });
+  el('pw-toggle-btn').addEventListener('click', () => {
+    const input = el('admin-pw');
+    const btn   = el('pw-toggle-btn');
+    const show  = input.type === 'password';
+    input.type      = show ? 'text' : 'password';
+    btn.textContent = show ? 'Hide' : 'Show';
+    btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+  });
 
   // Admin bar
   el('admin-add-btn').addEventListener('click', openAddPanel);
   el('admin-logout-btn').addEventListener('click', adminLogout);
 
-  // Add panel
-  el('add-panel-close-btn').addEventListener('click', closeAddPanel);
+  // Artist photo (admin)
+  el('artist-photo-upload-btn').addEventListener('click', () => el('artist-photo-file').click());
+  el('artist-photo-file').addEventListener('change', handleArtistPhotoUpload);
+  el('artist-photo-remove-btn').addEventListener('click', removeArtistPhoto);
   el('img-upload-area').addEventListener('click', () => el('img-file').click());
   el('img-file').addEventListener('change', handleImgUpload);
   el('save-painting-btn').addEventListener('click', saveNewPainting);

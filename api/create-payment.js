@@ -4,6 +4,7 @@ import { auditLog } from './_auditLog.js';
 import { checkCsrf } from './_csrf.js';
 import { checkBodySize } from './_bodyLimit.js';
 import { capFields } from './_sanitize.js';
+import { sendPurchaseNotification } from './_sendEmail.js';
 
 const redis = new Redis({
   url:   process.env.UPSTASH_REDIS_REST_URL,
@@ -217,8 +218,9 @@ export default async function handler(req, res) {
     await clearAttempts(ip, 'payment');
 
     // Mark purchased artworks as sold in Redis
-    const soldIds = new Set(items.map(i => Number(i.id)));
-    let artworks  = (await redis.get('artworks')) || [];
+    const soldIds      = new Set(items.map(i => Number(i.id)));
+    let artworks       = (await redis.get('artworks')) || [];
+    const soldArtworks = artworks.filter(a => soldIds.has(Number(a.id)));
     artworks = artworks.map(a => soldIds.has(Number(a.id)) ? { ...a, sold: true } : a);
     await redis.set('artworks', artworks);
 
@@ -233,6 +235,31 @@ export default async function handler(req, res) {
         postageCents: Math.round(postageAmount * 100),
       },
     });
+
+    // ── Send purchase notification to admin ───────────────────────────────
+    // Fire-and-forget — don't let email failure block the success response
+    const artworkTotal = expectedAmountCents / 100 - postageAmount;
+    sendPurchaseNotification({
+      orderId,
+      items:        soldArtworks.map(a => ({ title: a.title, price: a.price })),
+      artworkTotal,
+      postageName,
+      postagePrice:  postageAmount,
+      grandTotal:    expectedAmountCents / 100,
+      customer: {
+        firstName: firstName,
+        lastName:  lastName,
+        email:     email,
+        phone:     phone || '',
+      },
+      shipping: {
+        address:  address,
+        city:     city,
+        state:    req.body.state || '',
+        postcode: postcode,
+        country:  req.body.country || 'Australia',
+      },
+    }).catch(err => console.error('Purchase notification email failed:', err));
 
     return res.status(200).json({ success: true, orderId });
 
