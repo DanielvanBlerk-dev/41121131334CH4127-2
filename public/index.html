@@ -158,6 +158,7 @@
       <span class="admin-bar-label">Viewing as owner</span>
     </div>
     <div class="admin-bar-actions">
+      <button class="admin-btn" id="admin-orders-btn">Orders</button>
       <button class="admin-btn" id="admin-add-btn">+ Add painting</button>
       <button class="admin-btn danger" id="admin-logout-btn">Log out</button>
     </div>
@@ -492,6 +493,17 @@
     </div>
     <div class="add-panel-footer">
       <button class="save-btn" id="save-painting-btn">Save painting to gallery</button>
+    </div>
+  </aside>
+
+  <!-- ── ORDERS PANEL ───────────────────────────────────────────────────── -->
+  <aside class="orders-panel" id="orders-panel" role="dialog" aria-modal="true" aria-label="Order history">
+    <div class="orders-panel-head">
+      <h2 class="orders-panel-title">Order History</h2>
+      <button class="close-btn" id="orders-close-btn" aria-label="Close orders">&#x2715;</button>
+    </div>
+    <div class="orders-panel-body" id="orders-panel-body">
+      <div class="orders-loading" id="orders-loading">Loading orders…</div>
     </div>
   </aside>
 

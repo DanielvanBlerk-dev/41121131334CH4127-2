@@ -78,7 +78,7 @@ export default async function handler(req, res) {
   const {
     sourceId, currency = 'AUD',
     email, firstName, lastName,
-    address, city, postcode, phone,
+    address, city, state = '', postcode, phone, country = 'Australia',
     items = [],
     postageQuoteId,
   } = req.body || {};
@@ -236,29 +236,51 @@ export default async function handler(req, res) {
       },
     });
 
+    // ── Store full order record in Redis ──────────────────────────────────
+    // Retained for 90 days. Accessible via GET /api/get-orders (admin only).
+    // This is the reliable fallback if email notification fails.
+    const orderRecord = {
+      orderId,
+      ts:          new Date().toISOString(),
+      grandTotal:  expectedAmountCents / 100,
+      artworkTotal: expectedAmountCents / 100 - postageAmount,
+      postageName,
+      postagePrice: postageAmount,
+      items:        soldArtworks.map(a => ({ id: a.id, title: a.title, price: a.price })),
+      customer: {
+        firstName,
+        lastName,
+        email,
+        phone: phone || '',
+      },
+      shipping: {
+        address,
+        city,
+        state,
+        postcode,
+        country,
+      },
+    };
+
+    // Store individual order record (90 day TTL)
+    await redis.set(`order:${orderId}`, JSON.stringify(orderRecord), { ex: 90 * 24 * 60 * 60 });
+
+    // Prepend to order index list so get-orders can list them newest-first
+    await redis.lpush('order-index', orderId);
+    await redis.ltrim('order-index', 0, 499); // keep last 500 orders
+
     // ── Send purchase notification to admin ───────────────────────────────
-    // Fire-and-forget — don't let email failure block the success response
-    const artworkTotal = expectedAmountCents / 100 - postageAmount;
+    // Fire-and-forget — don't let email failure block the success response.
+    // Order is already stored in Redis above as the reliable fallback.
     sendPurchaseNotification({
       orderId,
       items:        soldArtworks.map(a => ({ title: a.title, price: a.price })),
-      artworkTotal,
+      artworkTotal: expectedAmountCents / 100 - postageAmount,
       postageName,
-      postagePrice:  postageAmount,
-      grandTotal:    expectedAmountCents / 100,
-      customer: {
-        firstName: firstName,
-        lastName:  lastName,
-        email:     email,
-        phone:     phone || '',
-      },
-      shipping: {
-        address:  address,
-        city:     city,
-        state:    req.body.state || '',
-        postcode: postcode,
-        country:  req.body.country || 'Australia',
-      },
+      postagePrice: postageAmount,
+      grandTotal:   expectedAmountCents / 100,
+      customer:     { firstName, lastName, email, phone: phone || '' },
+      shipping:     { address, city, state, postcode, country },
     }).catch(err => console.error('Purchase notification email failed:', err));
 
     return res.status(200).json({ success: true, orderId });

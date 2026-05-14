@@ -264,6 +264,8 @@ async function adminLogout() {
   el('admin-bar').classList.remove('visible');
   el('admin-nav-link').classList.remove('active');
   el('about-photo-admin').classList.remove('visible');
+  el('orders-panel').classList.remove('open');
+  document.body.style.overflow = '';
   renderGallery();
 }
 
@@ -529,7 +531,170 @@ function closeCheckout() {
   document.body.style.overflow = '';
 }
 
-/* ─── POSTAGE CALCULATOR ──────────────────────────────────────────────────── */
+/* ─── ORDERS PANEL ────────────────────────────────────────────────────────── */
+async function openOrders() {
+  el('orders-panel').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  await renderOrders();
+}
+
+function closeOrders() {
+  el('orders-panel').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+async function renderOrders() {
+  const body = el('orders-panel-body');
+  body.innerHTML = '<div class="orders-loading">Loading orders…</div>';
+
+  try {
+    const data = await apiFetch('/api/get-orders');
+    const orders = data.orders || [];
+
+    if (orders.length === 0) {
+      body.innerHTML = '<div class="orders-empty">No orders yet.</div>';
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+
+    orders.forEach(order => {
+      const card = document.createElement('div');
+      card.className = 'order-card';
+
+      // ── Header ──────────────────────────────────────────────────────────
+      const head = document.createElement('div');
+      head.className = 'order-card-head';
+
+      const idEl = document.createElement('span');
+      idEl.className   = 'order-card-id';
+      idEl.textContent = 'Order ' + order.orderId;
+
+      const dateEl = document.createElement('span');
+      dateEl.className   = 'order-card-date';
+      dateEl.textContent = order.ts
+        ? new Date(order.ts).toLocaleString('en-AU', {
+            day: 'numeric', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit',
+          })
+        : '—';
+
+      head.appendChild(idEl);
+      head.appendChild(dateEl);
+
+      // ── Body ─────────────────────────────────────────────────────────────
+      const body = document.createElement('div');
+      body.className = 'order-card-body';
+
+      // Works sold
+      const worksLabel = document.createElement('div');
+      worksLabel.className   = 'order-section-label';
+      worksLabel.textContent = 'Works Sold';
+      body.appendChild(worksLabel);
+
+      (order.items || []).forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'order-item-row';
+        const title = document.createElement('span');
+        title.className   = 'order-item-title';
+        title.textContent = item.title;
+        const price = document.createElement('span');
+        price.className   = 'order-item-price';
+        price.textContent = 'AUD $' + Number(item.price).toLocaleString();
+        row.appendChild(title); row.appendChild(price);
+        body.appendChild(row);
+      });
+
+      // Postage
+      const postageRow = document.createElement('div');
+      postageRow.className = 'order-postage-row';
+      const postageLabel = document.createElement('span');
+      postageLabel.textContent = order.postageName || 'Postage';
+      const postagePrice = document.createElement('span');
+      postagePrice.textContent = 'AUD $' + Number(order.postagePrice).toFixed(2);
+      postageRow.appendChild(postageLabel); postageRow.appendChild(postagePrice);
+      body.appendChild(postageRow);
+
+      // Total
+      const totalRow = document.createElement('div');
+      totalRow.className = 'order-total-row';
+      const totalLabel = document.createElement('span');
+      totalLabel.className   = 'order-total-label';
+      totalLabel.textContent = 'Total Charged';
+      const totalAmount = document.createElement('span');
+      totalAmount.className   = 'order-total-amount';
+      totalAmount.textContent = 'AUD $' + Number(order.grandTotal).toFixed(2);
+      totalRow.appendChild(totalLabel); totalRow.appendChild(totalAmount);
+      body.appendChild(totalRow);
+
+      // Customer
+      const custLabel = document.createElement('div');
+      custLabel.className   = 'order-section-label';
+      custLabel.textContent = 'Customer';
+      body.appendChild(custLabel);
+
+      const custGrid = document.createElement('div');
+      custGrid.className = 'order-detail-grid';
+
+      const c = order.customer || {};
+      const custFields = [
+        ['Name',  (c.firstName || '') + ' ' + (c.lastName || '')],
+        ['Email', c.email || '—'],
+        ['Phone', c.phone || '—'],
+      ];
+      custFields.forEach(([key, val]) => {
+        const k = document.createElement('span'); k.className = 'order-detail-key'; k.textContent = key;
+        const v = document.createElement('span'); v.className = 'order-detail-val';
+        if (key === 'Email' && c.email) {
+          const a = document.createElement('a');
+          a.href = 'mailto:' + c.email; a.textContent = c.email;
+          v.appendChild(a);
+        } else {
+          v.textContent = val;
+        }
+        custGrid.appendChild(k); custGrid.appendChild(v);
+      });
+      body.appendChild(custGrid);
+
+      // Shipping
+      const shipLabel = document.createElement('div');
+      shipLabel.className   = 'order-section-label';
+      shipLabel.textContent = 'Ship To';
+      body.appendChild(shipLabel);
+
+      const shipGrid = document.createElement('div');
+      shipGrid.className = 'order-detail-grid';
+
+      const s = order.shipping || {};
+      const shipFields = [
+        ['Address', s.address || '—'],
+        ['City',    s.city    || '—'],
+        ['State',   s.state   || '—'],
+        ['Postcode',s.postcode|| '—'],
+        ['Country', s.country || '—'],
+      ];
+      shipFields.forEach(([key, val]) => {
+        const k = document.createElement('span'); k.className = 'order-detail-key'; k.textContent = key;
+        const v = document.createElement('span'); v.className = 'order-detail-val'; v.textContent = val;
+        shipGrid.appendChild(k); shipGrid.appendChild(v);
+      });
+      body.appendChild(shipGrid);
+
+      card.appendChild(head);
+      card.appendChild(body);
+      frag.appendChild(card);
+    });
+
+    el('orders-panel-body').innerHTML = '';
+    el('orders-panel-body').appendChild(frag);
+
+  } catch (e) {
+    el('orders-panel-body').innerHTML = '<div class="orders-empty">Could not load orders. Please try again.</div>';
+    console.error('renderOrders error:', e);
+  }
+}
+
+
 async function calculatePostage() {
   const postcode   = el('buyer-postcode').value.trim();
   const resultEl   = el('postage-result');
@@ -901,13 +1066,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Admin bar
+  el('admin-orders-btn').addEventListener('click', openOrders);
   el('admin-add-btn').addEventListener('click', openAddPanel);
   el('admin-logout-btn').addEventListener('click', adminLogout);
+
+  // Orders panel
+  el('orders-close-btn').addEventListener('click', closeOrders);
 
   // Artist photo (admin)
   el('artist-photo-upload-btn').addEventListener('click', () => el('artist-photo-file').click());
   el('artist-photo-file').addEventListener('change', handleArtistPhotoUpload);
   el('artist-photo-remove-btn').addEventListener('click', removeArtistPhoto);
+  el('add-panel-close-btn').addEventListener('click', closeAddPanel);
   el('img-upload-area').addEventListener('click', () => el('img-file').click());
   el('img-file').addEventListener('change', handleImgUpload);
   el('save-painting-btn').addEventListener('click', saveNewPainting);
