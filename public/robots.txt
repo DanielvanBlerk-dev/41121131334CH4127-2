@@ -1,0 +1,24 @@
+# robots.txt — Airlie Beach Art
+# https://airliebeachart.com.au/
+
+# Allow all crawlers full access to the site
+User-agent: *
+Allow: /
+
+# Block API routes — these are server functions, not pages
+Disallow: /api/
+
+# Block admin-related paths
+Disallow: /api/login
+Disallow: /api/logout
+Disallow: /api/audit-log
+Disallow: /api/add-painting
+Disallow: /api/delete-painting
+Disallow: /api/update-painting
+Disallow: /api/toggle-sold
+
+# Sitemap location
+Sitemap: https://airliebeachart.com.au/sitemap.xml
+
+# Crawl rate hint (optional — Google may ignore this)
+Crawl-delay: 1

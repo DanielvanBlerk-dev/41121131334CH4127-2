@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+
+  <!-- ── HOMEPAGE ─────────────────────────────────────────────────────── -->
+  <url>
+    <loc>https://airliebeachart.com.au/</loc>
+    <lastmod>2026-05-14</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en-AU" href="https://airliebeachart.com.au/"/>
+  </url>
+
+  <!-- ── SEASCAPES SECTION ─────────────────────────────────────────────── -->
+  <url>
+    <loc>https://airliebeachart.com.au/#seascapes</loc>
+    <lastmod>2026-05-14</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- ── FIGURATIVE SECTION ────────────────────────────────────────────── -->
+  <url>
+    <loc>https://airliebeachart.com.au/#figurative</loc>
+    <lastmod>2026-05-14</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- ── ABOUT SECTION ─────────────────────────────────────────────────── -->
+  <url>
+    <loc>https://airliebeachart.com.au/#about</loc>
+    <lastmod>2026-05-14</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- ── COMMISSIONS SECTION ───────────────────────────────────────────── -->
+  <url>
+    <loc>https://airliebeachart.com.au/#commissions</loc>
+    <lastmod>2026-05-14</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- ── CONTACT SECTION ───────────────────────────────────────────────── -->
+  <url>
+    <loc>https://airliebeachart.com.au/#contact</loc>
+    <lastmod>2026-05-14</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+</urlset>
