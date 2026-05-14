@@ -7,7 +7,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'none'; script-src 'self' https://web.squarecdn.com; style-src 'self' https://fonts.googleapis.com https://web.squarecdn.com; font-src 'self' https://fonts.gstatic.com https://web.squarecdn.com; img-src 'self' data: blob: https://*.public.blob.vercel-storage.com; connect-src 'self' https://pci-connect.squareup.com https://connect.squareup.com https://o160250.ingest.sentry.io; frame-src https://web.squarecdn.com https://pci-connect.squareup.com; form-action 'self'; base-uri 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+          "value": "default-src 'none'; script-src 'self' https://web.squarecdn.com; style-src 'self' https://fonts.googleapis.com https://web.squarecdn.com; font-src 'self' https://fonts.gstatic.com https://web.squarecdn.com; img-src 'self' data: blob: https://*.public.blob.vercel-storage.com https://web.squarecdn.com; connect-src 'self' https://pci-connect.squareup.com https://connect.squareup.com https://o160250.ingest.sentry.io; frame-src https://web.squarecdn.com https://pci-connect.squareup.com; form-action 'self'; base-uri 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
         },
         { "key": "Strict-Transport-Security",  "value": "max-age=63072000; includeSubDomains; preload" },
         { "key": "X-Frame-Options",             "value": "DENY" },
