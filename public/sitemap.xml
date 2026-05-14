@@ -4,16 +4,16 @@
 
   <!-- ── HOMEPAGE ─────────────────────────────────────────────────────── -->
   <url>
-    <loc>https://airliebeachart.com.au/</loc>
+    <loc>https://airliebeachart.com/</loc>
     <lastmod>2026-05-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
-    <xhtml:link rel="alternate" hreflang="en-AU" href="https://airliebeachart.com.au/"/>
+    <xhtml:link rel="alternate" hreflang="en-AU" href="https://airliebeachart.com/"/>
   </url>
 
   <!-- ── SEASCAPES SECTION ─────────────────────────────────────────────── -->
   <url>
-    <loc>https://airliebeachart.com.au/#seascapes</loc>
+    <loc>https://airliebeachart.com/#seascapes</loc>
     <lastmod>2026-05-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
@@ -21,7 +21,7 @@
 
   <!-- ── FIGURATIVE SECTION ────────────────────────────────────────────── -->
   <url>
-    <loc>https://airliebeachart.com.au/#figurative</loc>
+    <loc>https://airliebeachart.com/#figurative</loc>
     <lastmod>2026-05-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
@@ -29,7 +29,7 @@
 
   <!-- ── ABOUT SECTION ─────────────────────────────────────────────────── -->
   <url>
-    <loc>https://airliebeachart.com.au/#about</loc>
+    <loc>https://airliebeachart.com/#about</loc>
     <lastmod>2026-05-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
@@ -37,7 +37,7 @@
 
   <!-- ── COMMISSIONS SECTION ───────────────────────────────────────────── -->
   <url>
-    <loc>https://airliebeachart.com.au/#commissions</loc>
+    <loc>https://airliebeachart.com/#commissions</loc>
     <lastmod>2026-05-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -45,7 +45,7 @@
 
   <!-- ── CONTACT SECTION ───────────────────────────────────────────────── -->
   <url>
-    <loc>https://airliebeachart.com.au/#contact</loc>
+    <loc>https://airliebeachart.com/#contact</loc>
     <lastmod>2026-05-14</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
