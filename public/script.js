@@ -17,6 +17,7 @@ let pendingDeleteId = null;
 let newImgData      = null;
 let squareCard      = null;
 let squarePayments  = null;
+let selectedPostage = null; // { name, price } — set when buyer selects a postage option
 
 /* ─── API HELPERS ─────────────────────────────────────────────────────────── */
 async function apiFetch(path, options = {}) {
@@ -401,21 +402,43 @@ function toggleCart() {
 
 /* ─── CHECKOUT ────────────────────────────────────────────────────────────── */
 function buildOrderSummary() {
-  const total     = cart.reduce((s, i) => s + i.price, 0);
-  const summaryEl = el('order-summary');
+  const artworkTotal = cart.reduce((s, i) => s + i.price, 0);
+  const postageTotal = selectedPostage ? selectedPostage.price : 0;
+  const grandTotal   = artworkTotal + postageTotal;
+  const summaryEl    = el('order-summary');
   summaryEl.innerHTML = '';
+
+  // Artwork lines
   cart.forEach(a => {
-    const row       = document.createElement('div'); row.className = 'order-line';
-    const nameSpan  = document.createElement('span');
-    const em        = document.createElement('em'); em.textContent = a.title;
+    const row      = document.createElement('div'); row.className = 'order-line';
+    const nameSpan = document.createElement('span');
+    const em       = document.createElement('em'); em.textContent = a.title;
     nameSpan.appendChild(em);
-    const priceSpan = document.createElement('span'); priceSpan.textContent = 'AUD $' + a.price.toLocaleString();
+    const priceSpan = document.createElement('span');
+    priceSpan.textContent = 'AUD $' + a.price.toLocaleString();
     row.appendChild(nameSpan); row.appendChild(priceSpan);
     summaryEl.appendChild(row);
   });
+
+  // Postage line — shows selected service or placeholder
+  const postageRow = document.createElement('div'); postageRow.className = 'order-line';
+  const postageLabel = document.createElement('span');
+  postageLabel.textContent = selectedPostage ? selectedPostage.name : 'Postage (select above)';
+  if (!selectedPostage) postageLabel.style.color = 'var(--gold)';
+  const postagePrice = document.createElement('span');
+  postagePrice.textContent = selectedPostage ? 'AUD $' + selectedPostage.price.toFixed(2) : '—';
+  postageRow.appendChild(postageLabel); postageRow.appendChild(postagePrice);
+  summaryEl.appendChild(postageRow);
+
+  // Grand total
   const totalRow = document.createElement('div'); totalRow.className = 'order-line total';
-  totalRow.innerHTML = '<strong>Total</strong><strong>AUD $' + total.toLocaleString() + '</strong>';
+  totalRow.innerHTML = '<strong>Total</strong><strong>AUD $' + grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</strong>';
   summaryEl.appendChild(totalRow);
+}
+
+// Re-renders the order summary whenever postage selection changes
+function updateOrderSummary() {
+  buildOrderSummary();
 }
 
 async function openCheckout() {
@@ -431,6 +454,7 @@ function closeCheckout() {
   el('checkout-modal').classList.remove('open');
   el('postage-result').innerHTML = '';
   el('buyer-postcode').value = '';
+  selectedPostage = null;
   document.body.style.overflow = '';
 }
 
@@ -479,23 +503,70 @@ async function calculatePostage() {
     });
 
     if (data.services && data.services.length > 0) {
-      const rows = data.services.map(s => `
-        <div class="postage-service">
-          <span class="postage-service-name">${s.name}</span>
-          <span class="postage-service-details">
-            ${s.deliveryTime ? '<span class="postage-delivery">' + s.deliveryTime + '</span>' : ''}
-            <span class="postage-price">AUD $${s.price.toFixed(2)}</span>
-          </span>
-        </div>
-      `).join('');
+      // Reset any previously selected postage
+      selectedPostage = null;
 
-      resultEl.innerHTML = `
-        <div class="postage-services">
-          <p class="postage-note">Postage from Airlie Beach (4802) to ${postcode}${cart.length > 1 ? ' — quoted for largest item' : ''}:</p>
-          ${rows}
-          <p class="postage-disclaimer">Postage is calculated per parcel and added to your order total at dispatch. Michael will confirm the final amount before shipping.</p>
-        </div>`;
+      const servicesWrap = document.createElement('div');
+      servicesWrap.className = 'postage-services';
+
+      const note = document.createElement('p');
+      note.className   = 'postage-note';
+      note.textContent = `Postage from Airlie Beach (4802) to ${postcode}${cart.length > 1 ? ' — quoted for largest item' : ''}. Select a service:`;
+      servicesWrap.appendChild(note);
+
+      data.services.forEach((s, i) => {
+        const label = document.createElement('label');
+        label.className = 'postage-service postage-service-selectable';
+        label.htmlFor   = 'postage-option-' + i;
+
+        const radio = document.createElement('input');
+        radio.type    = 'radio';
+        radio.name    = 'postage-option';
+        radio.id      = 'postage-option-' + i;
+        radio.value   = i;
+        radio.className = 'postage-radio';
+        radio.addEventListener('change', () => {
+          selectedPostage = { name: s.name, price: s.price };
+          updateOrderSummary();
+          // Clear any payment error about missing postage
+          el('payment-error').style.display = 'none';
+        });
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className   = 'postage-service-name';
+        nameSpan.textContent = s.name;
+
+        const detailsSpan = document.createElement('span');
+        detailsSpan.className = 'postage-service-details';
+
+        if (s.deliveryTime) {
+          const delSpan = document.createElement('span');
+          delSpan.className   = 'postage-delivery';
+          delSpan.textContent = s.deliveryTime;
+          detailsSpan.appendChild(delSpan);
+        }
+
+        const priceSpan = document.createElement('span');
+        priceSpan.className   = 'postage-price';
+        priceSpan.textContent = 'AUD $' + s.price.toFixed(2);
+        detailsSpan.appendChild(priceSpan);
+
+        label.appendChild(radio);
+        label.appendChild(nameSpan);
+        label.appendChild(detailsSpan);
+        servicesWrap.appendChild(label);
+      });
+
+      const disclaimer = document.createElement('p');
+      disclaimer.className   = 'postage-disclaimer';
+      disclaimer.textContent = 'Selected postage will be added to your total. Michael will confirm and dispatch once payment is received.';
+      servicesWrap.appendChild(disclaimer);
+
+      resultEl.innerHTML = '';
+      resultEl.appendChild(servicesWrap);
+
     } else {
+      selectedPostage = null;
       resultEl.innerHTML = `<p class="postage-error">${data.message || 'No postage options found. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a quote.'}</p>`;
     }
   } catch (e) {
@@ -602,6 +673,12 @@ async function handlePayment() {
   const fields = validateForm();
   if (!fields) return;
 
+  // Require a postage option to be selected
+  if (!selectedPostage) {
+    showPaymentError('Please calculate postage and select a shipping option before completing your purchase.');
+    return;
+  }
+
   if (!squareCard) { showPaymentError('Payment form is not ready. Please try again.'); return; }
 
   const btn = el('pay-btn');
@@ -631,30 +708,38 @@ async function processPayment(sourceId, fields) {
     return;
   }
 
+  if (!selectedPostage) {
+    showPaymentError('Please select a postage option before completing your purchase.');
+    const btn = el('pay-btn');
+    btn.disabled = false; btn.textContent = 'Complete Purchase';
+    return;
+  }
+
   try {
-    // Send item IDs only — server computes prices from Redis.
-    // Never send client-computed amounts; the server ignores them anyway.
     const data = await apiFetch('/api/create-payment', {
       method: 'POST',
       body: JSON.stringify({
         sourceId,
-        currency:  'AUD',
-        email:     recheck.email,
-        firstName: recheck.firstName,
-        lastName:  recheck.lastName,
-        address:   recheck.address,
-        city:      recheck.city,
-        state:     recheck.state,
-        postcode:  recheck.postcode,
-        phone:     recheck.phone,
-        country:   recheck.country,
-        items:     cart.map(a => ({ id: a.id })),
+        currency:      'AUD',
+        email:         recheck.email,
+        firstName:     recheck.firstName,
+        lastName:      recheck.lastName,
+        address:       recheck.address,
+        city:          recheck.city,
+        state:         recheck.state,
+        postcode:      recheck.postcode,
+        phone:         recheck.phone,
+        country:       recheck.country,
+        items:         cart.map(a => ({ id: a.id })),
+        postageName:   selectedPostage.name,
+        postagePrice:  selectedPostage.price,
       }),
     });
 
     await squareCard.clear?.();
     await loadArtworks();
     cart = [];
+    selectedPostage = null;
     updateCartUI();
     showSuccess(data.orderId);
 
@@ -691,6 +776,7 @@ function isSafeServerMessage(msg) {
     'Invalid or incomplete form data',
     'An unexpected error occurred',
     'Payment could not be processed',
+    'Invalid postage',
   ];
   return safe.some(s => msg.includes(s));
 }

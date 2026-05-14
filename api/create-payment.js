@@ -79,6 +79,7 @@ export default async function handler(req, res) {
     email, firstName, lastName,
     address, city, postcode, phone,
     items = [],
+    postageName, postagePrice,
   } = req.body || {};
 
   if (
@@ -94,6 +95,18 @@ export default async function handler(req, res) {
     items.length === 0
   ) {
     return res.status(400).json({ success: false, error: 'Invalid or incomplete form data' });
+  }
+
+  // ── Validate postage ──────────────────────────────────────────────────
+  // postageName must be a non-empty string, postagePrice must be a positive number.
+  // We trust the price came from the AusPost API via our own postage endpoint —
+  // but we still cap it to a sane maximum to prevent manipulation.
+  if (!isValidString(postageName)) {
+    return res.status(400).json({ success: false, error: 'Invalid postage selection. Please select a postage option.' });
+  }
+  const postageAmount = parseFloat(postagePrice);
+  if (isNaN(postageAmount) || postageAmount < 0 || postageAmount > 500) {
+    return res.status(400).json({ success: false, error: 'Invalid postage amount.' });
   }
 
   // ── Length caps ───────────────────────────────────────────────────────
@@ -125,7 +138,9 @@ export default async function handler(req, res) {
   // ── Compute amount server-side — never trust the client ───────────────
   let expectedAmountCents;
   try {
-    expectedAmountCents = await computeExpectedAmount(items);
+    const artworkCents  = await computeExpectedAmount(items);
+    const postageCents  = Math.round(postageAmount * 100);
+    expectedAmountCents = artworkCents + postageCents;
   } catch (err) {
     await auditLog({ action: 'payment_rejected', ip, detail: { reason: err.message } });
     return res.status(400).json({ success: false, error: err.message });
@@ -193,9 +208,10 @@ export default async function handler(req, res) {
       ip,
       detail: {
         orderId,
-        itemCount:   items.length,
-        amountCents: expectedAmountCents,
-        // Deliberately NOT logging: sourceId, email, name, address — minimise PII in logs
+        itemCount:    items.length,
+        amountCents:  expectedAmountCents,
+        postageName,
+        postageCents: Math.round(postageAmount * 100),
       },
     });
 
