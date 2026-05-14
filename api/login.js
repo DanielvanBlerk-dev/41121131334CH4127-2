@@ -4,6 +4,8 @@ import { getIp, checkRateLimit, recordFailedAttempt, clearAttempts } from './_ra
 import { auditLog } from './_auditLog.js';
 import { checkCsrf } from './_csrf.js';
 import { checkBodySize } from './_bodyLimit.js';
+import { getTokenVersion } from './_verifyAdmin.js';
+import { capLength } from './_sanitize.js';
 
 /**
  * POST /api/login
@@ -50,6 +52,12 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing password' });
   }
 
+  // ── Length cap ────────────────────────────────────────────────────────
+  // bcrypt silently truncates at 72 bytes. Reject absurdly long inputs
+  // that could be used for DoS (hashing a 10MB string is expensive).
+  const pwCap = capLength('Password', password, 1000);
+  if (!pwCap.ok) return res.status(400).json({ error: pwCap.error });
+
   const hash      = process.env.ADMIN_PASSWORD_HASH;
   const jwtSecret = process.env.ADMIN_JWT_SECRET;
 
@@ -80,8 +88,13 @@ export default async function handler(req, res) {
   await clearAttempts(ip, 'login');
   await auditLog({ action: 'login_success', ip });
 
+  // Fetch the current token version and embed it in the JWT.
+  // When the admin logs out, this version is incremented in Redis,
+  // instantly invalidating this token even if it hasn't expired yet.
+  const tokenVersion = await getTokenVersion();
+
   const token = jwt.sign(
-    { role: 'admin' },
+    { role: 'admin', tokenVersion },
     jwtSecret,
     { expiresIn: '12h' }
   );

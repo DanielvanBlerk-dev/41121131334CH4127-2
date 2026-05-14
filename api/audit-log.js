@@ -16,7 +16,7 @@ import { getAuditLog } from './_auditLog.js';
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  const admin = verifyAdmin(req);
+  const admin = await verifyAdmin(req);
   if (!admin) return res.status(401).json({ error: 'Unauthorized' });
 
   const limit = Math.min(parseInt(req.query.limit) || 100, 500);

@@ -1,10 +1,11 @@
 import { Redis } from '@upstash/redis';
 import { verifyAdmin } from './_verifyAdmin.js';
-import { sanitizeString } from './_sanitize.js';
+import { sanitizeString, capFields } from './_sanitize.js';
 import { getIp } from './_rateLimit.js';
 import { auditLog } from './_auditLog.js';
 import { checkCsrf } from './_csrf.js';
 import { checkBodySize } from './_bodyLimit.js';
+import { validateImage } from './_imageValidator.js';
 
 const redis = new Redis({
   url:   process.env.UPSTASH_REDIS_REST_URL,
@@ -22,7 +23,7 @@ export default async function handler(req, res) {
   const size = checkBodySize(req, '5mb');
   if (!size.ok) return res.status(413).json({ error: size.error });
 
-  const admin = verifyAdmin(req);
+  const admin = await verifyAdmin(req);
   if (!admin) {
     await auditLog({ action: 'unauthorised', ip: getIp(req), detail: { endpoint: 'add-painting' } });
     return res.status(401).json({ error: 'Unauthorized' });
@@ -34,10 +35,36 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  const { title, medium, price, sold = false, imgData = null } = req.body || {};
+  const { title, medium, price, sold = false, imgData = null, category = 'seascape' } = req.body || {};
 
   if (!isValidString(title) || !isValidString(medium) || typeof price !== 'number' || price < 0) {
     return res.status(400).json({ success: false, error: 'Invalid artwork data' });
+  }
+
+  const validCategories = ['seascape', 'figurative'];
+  if (!validCategories.includes(category)) {
+    return res.status(400).json({ success: false, error: 'Invalid category. Must be seascape or figurative.' });
+  }
+
+  // ── Length caps ───────────────────────────────────────────────────────
+  const caps = capFields([
+    ['Title',  title,  200],
+    ['Medium', medium, 300],
+  ]);
+  if (!caps.ok) return res.status(400).json({ success: false, error: caps.error });
+
+  // ── Image validation ──────────────────────────────────────────────────
+  // Only validate if an image was actually provided — it's optional.
+  if (imgData) {
+    const imgCheck = validateImage(imgData);
+    if (!imgCheck.ok) {
+      await auditLog({
+        action: 'image_rejected',
+        ip:     getIp(req),
+        detail: { endpoint: 'add-painting', reason: imgCheck.error },
+      });
+      return res.status(400).json({ success: false, error: imgCheck.error });
+    }
   }
 
   try {
@@ -45,6 +72,7 @@ export default async function handler(req, res) {
     const id = Date.now();
     artworks.push({
       id,
+      category,
       title:   sanitizeString(title),
       medium:  sanitizeString(medium),
       price,

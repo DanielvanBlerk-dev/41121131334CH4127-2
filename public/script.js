@@ -48,71 +48,88 @@ async function loadArtworks() {
 }
 
 /* ─── GALLERY — render ────────────────────────────────────────────────────── */
+
+/** Builds a single artwork card element. */
+function buildCard(art) {
+  const card = document.createElement('div');
+  card.className = 'artwork-card';
+  card.id = 'card-' + art.id;
+
+  // Image area
+  const imgWrap = document.createElement('div');
+  imgWrap.className = 'artwork-img';
+  if (art.imgData) {
+    const img = document.createElement('img');
+    img.src = art.imgData; img.alt = art.title;
+    imgWrap.appendChild(img);
+  } else if (art.svg) {
+    imgWrap.innerHTML = art.svg;
+  }
+  if (art.sold) {
+    const overlay = document.createElement('div');
+    overlay.className = 'sold-overlay';
+    overlay.textContent = 'Sold';
+    imgWrap.appendChild(overlay);
+  }
+
+  // Label row
+  const labelRow = document.createElement('div'); labelRow.className = 'artwork-label';
+  const titleEl  = document.createElement('span'); titleEl.className  = 'artwork-title'; titleEl.textContent = art.title;
+  const priceEl  = document.createElement('span'); priceEl.className  = 'artwork-price'; priceEl.textContent = 'AUD $' + art.price.toLocaleString();
+  labelRow.appendChild(titleEl); labelRow.appendChild(priceEl);
+
+  const mediumEl = document.createElement('div'); mediumEl.className = 'artwork-medium'; mediumEl.textContent = art.medium;
+
+  // Add to cart button
+  const addBtn = document.createElement('button');
+  addBtn.className   = 'add-btn' + (inCart(art.id) ? ' added' : '');
+  addBtn.disabled    = art.sold || inCart(art.id);
+  addBtn.textContent = art.sold ? 'Sold' : inCart(art.id) ? 'In your selection' : '+ Add to selection';
+  addBtn.addEventListener('click', () => addToCart(art.id));
+
+  // Admin controls
+  const adminCtrl = document.createElement('div');
+  adminCtrl.className = 'admin-controls' + (isAdmin ? ' visible' : '');
+
+  const soldBtn = document.createElement('button');
+  soldBtn.className   = 'admin-ctrl-btn sold-toggle';
+  soldBtn.textContent = art.sold ? 'Mark available' : 'Mark sold';
+  soldBtn.addEventListener('click', () => toggleSold(art.id));
+
+  const delBtn = document.createElement('button');
+  delBtn.className   = 'admin-ctrl-btn del';
+  delBtn.textContent = 'Delete';
+  delBtn.addEventListener('click', () => confirmDelete(art.id, art.title));
+
+  adminCtrl.appendChild(soldBtn);
+  adminCtrl.appendChild(delBtn);
+
+  card.appendChild(imgWrap); card.appendChild(labelRow); card.appendChild(mediumEl);
+  card.appendChild(addBtn);  card.appendChild(adminCtrl);
+  return card;
+}
+
+/** Populates a grid element with cards, or shows an empty message. */
+function populateGrid(gridEl, items) {
+  gridEl.innerHTML = '';
+  if (items.length === 0) {
+    const empty = document.createElement('p');
+    empty.className   = 'gallery-empty';
+    empty.textContent = 'No works in this collection yet.';
+    gridEl.appendChild(empty);
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  items.forEach(art => frag.appendChild(buildCard(art)));
+  gridEl.appendChild(frag);
+}
+
 function renderGallery() {
-  const grid     = el('gallery-grid');
-  const fragment = document.createDocumentFragment();
+  const seascapes  = artworks.filter(a => a.category === 'seascape');
+  const figurative = artworks.filter(a => a.category === 'figurative' || !a.category);
 
-  artworks.forEach(art => {
-    const card = document.createElement('div');
-    card.className = 'artwork-card';
-    card.id = 'card-' + art.id;
-
-    // Image area
-    const imgWrap = document.createElement('div');
-    imgWrap.className = 'artwork-img';
-    if (art.imgData) {
-      const img = document.createElement('img');
-      img.src = art.imgData; img.alt = art.title;
-      imgWrap.appendChild(img);
-    } else if (art.svg) {
-      imgWrap.innerHTML = art.svg;
-    }
-    if (art.sold) {
-      const overlay = document.createElement('div');
-      overlay.className = 'sold-overlay';
-      overlay.textContent = 'Sold';
-      imgWrap.appendChild(overlay);
-    }
-
-    // Label row
-    const labelRow  = document.createElement('div'); labelRow.className = 'artwork-label';
-    const titleEl   = document.createElement('span'); titleEl.className  = 'artwork-title'; titleEl.textContent = art.title;
-    const priceEl   = document.createElement('span'); priceEl.className  = 'artwork-price'; priceEl.textContent = 'AUD $' + art.price.toLocaleString();
-    labelRow.appendChild(titleEl); labelRow.appendChild(priceEl);
-
-    const mediumEl  = document.createElement('div'); mediumEl.className = 'artwork-medium'; mediumEl.textContent = art.medium;
-
-    // Add to cart button
-    const addBtn = document.createElement('button');
-    addBtn.className = 'add-btn' + (inCart(art.id) ? ' added' : '');
-    addBtn.disabled  = art.sold || inCart(art.id);
-    addBtn.textContent = art.sold ? 'Sold' : inCart(art.id) ? 'In your selection' : '+ Add to selection';
-    addBtn.addEventListener('click', () => addToCart(art.id));
-
-    // Admin controls
-    const adminCtrl = document.createElement('div');
-    adminCtrl.className = 'admin-controls' + (isAdmin ? ' visible' : '');
-
-    const soldBtn = document.createElement('button');
-    soldBtn.className  = 'admin-ctrl-btn sold-toggle';
-    soldBtn.textContent = art.sold ? 'Mark available' : 'Mark sold';
-    soldBtn.addEventListener('click', () => toggleSold(art.id));
-
-    const delBtn = document.createElement('button');
-    delBtn.className  = 'admin-ctrl-btn del';
-    delBtn.textContent = 'Delete';
-    delBtn.addEventListener('click', () => confirmDelete(art.id, art.title));
-
-    adminCtrl.appendChild(soldBtn);
-    adminCtrl.appendChild(delBtn);
-
-    card.appendChild(imgWrap); card.appendChild(labelRow); card.appendChild(mediumEl);
-    card.appendChild(addBtn);  card.appendChild(adminCtrl);
-    fragment.appendChild(card);
-  });
-
-  grid.innerHTML = '';
-  grid.appendChild(fragment);
+  populateGrid(el('gallery-seascapes'),  seascapes);
+  populateGrid(el('gallery-figurative'), figurative);
 }
 
 function inCart(id) { return cart.some(i => i.id === id); }
@@ -154,7 +171,19 @@ async function attemptLogin() {
   }
 }
 
-function adminLogout() {
+async function adminLogout() {
+  // Tell the server to rotate the token version first.
+  // This invalidates the current JWT in Redis even if it hasn't expired.
+  // We clear locally regardless of whether the server call succeeds —
+  // the user is always logged out on this device either way.
+  try {
+    await apiFetch('/api/logout', { method: 'POST', body: JSON.stringify({}) });
+  } catch (e) {
+    // Server-side rotation failed (network issue, etc.) — still log out locally.
+    // The token will expire naturally after 12h.
+    console.error('Server logout failed:', e);
+  }
+
   clearToken();
   isAdmin = false;
   el('admin-bar').classList.remove('visible');
@@ -218,7 +247,8 @@ function openAddPanel() {
   el('add-panel').classList.add('open');
   document.body.style.overflow = 'hidden';
   ['new-title', 'new-medium', 'new-price'].forEach(id => el(id).value = '');
-  el('new-sold').checked = false;
+  el('new-category').value = 'seascape';
+  el('new-sold').checked   = false;
   el('add-error').textContent = '';
   el('img-placeholder').style.display = 'block';
   el('img-preview-el').style.display  = 'none';
@@ -245,6 +275,7 @@ async function saveNewPainting() {
   const title    = el('new-title').value.trim();
   const medium   = el('new-medium').value.trim();
   const priceRaw = el('new-price').value;
+  const category = el('new-category').value;  // 'seascape' or 'figurative'
   const sold     = el('new-sold').checked;
   const errEl    = el('add-error');
 
@@ -259,7 +290,7 @@ async function saveNewPainting() {
   try {
     const data = await apiFetch('/api/add-painting', {
       method: 'POST',
-      body:   JSON.stringify({ title, medium, price, sold, imgData: newImgData || null }),
+      body:   JSON.stringify({ title, medium, price, category, sold, imgData: newImgData || null }),
     });
     await loadArtworks();
     renderGallery();

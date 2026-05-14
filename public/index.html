@@ -3,20 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Atelier — Original Fine Art</title>
+  <title>Airlie Beach Art — Michael van Blerk</title>
 
-  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 
-  <!-- Styles -->
   <link rel="stylesheet" href="style.css">
 
-  <!-- Square Web Payments SDK — Production -->
   <script src="https://web.squarecdn.com/v1/square.js" defer></script>
-
-  <!-- App config then app logic -->
   <script src="square-config.js" defer></script>
   <script src="script.js" defer></script>
 </head>
@@ -36,10 +31,12 @@
 
   <!-- ── NAV ───────────────────────────────────────────────────────────── -->
   <nav role="navigation" aria-label="Main">
-    <a href="#" class="nav-logo">Ate<span>lier</span></a>
+    <a href="#" class="nav-logo">Airlie Beach Art</a>
     <div class="nav-right">
-      <a href="#gallery" class="nav-link">Works</a>
-      <a href="#about"   class="nav-link">About</a>
+      <a href="#seascapes" class="nav-link">Seascapes</a>
+      <a href="#figurative" class="nav-link">Figurative</a>
+      <a href="#commissions" class="nav-link">Commissions</a>
+      <a href="#contact" class="nav-link">Contact</a>
       <a href="#" class="nav-link" id="admin-nav-link" title="Owner login" aria-label="Owner login">&#9679;</a>
       <button class="cart-btn" id="cart-toggle-btn" aria-label="Open cart">
         Cart <span class="cart-count" id="cart-count">0</span>
@@ -49,42 +46,114 @@
 
   <!-- ── HERO ──────────────────────────────────────────────────────────── -->
   <section class="hero" aria-label="Introduction">
-    <div>
-      <p class="hero-eyebrow">Original Fine Art — Unique Works</p>
-      <h1 class="hero-title">
-        Paintings made<br>to be<br><em>lived with.</em>
-      </h1>
-      <p class="hero-sub">Each work is a singular original — oil and acrylic on linen or board. Signed, certificated, and shipped directly from the studio.</p>
-    </div>
-    <div class="hero-right" aria-hidden="true">
-      <div class="hero-stat">VI</div>
-      <div class="hero-stat-label">Works Available</div>
+    <div class="hero-inner">
+      <p class="hero-eyebrow">Airlie Beach, Queensland</p>
+      <h1 class="hero-title">Airlie Beach Art</h1>
+      <h2 class="hero-sub-title">Paintings made to be lived with.</h2>
+      <p class="hero-body">
+        Airlie Beach Art is the home of Whitsunday-based artist Michael van Blerk — featuring luminous regional seascapes capturing the light and water of the Whitsunday Islands, and powerful figurative work rooted in the Baroque tradition of sacred and devotional painting.
+      </p>
+      <p class="hero-body">
+        All works are original oil or acrylic on canvas, available for sale and commission.
+      </p>
     </div>
   </section>
 
-  <!-- ── GALLERY ────────────────────────────────────────────────────────── -->
-  <section class="section" id="gallery" aria-label="Current collection">
-    <div class="section-header">
-      <h2 class="section-title">Current Collection</h2>
-      <span class="section-meta">All works — oil on linen unless noted</span>
-    </div>
-    <div class="gallery" id="gallery-grid"></div>
-  </section>
-
-  <!-- ── ABOUT ─────────────────────────────────────────────────────────── -->
+  <!-- ── ABOUT THE ARTIST ───────────────────────────────────────────────── -->
   <section class="section about-section" id="about" aria-label="About the artist">
-    <div class="about-inner">
-      <p class="hero-eyebrow about-eyebrow">The Artist</p>
-      <h2 class="about-title">A studio practice<br><em>rooted in observation.</em></h2>
-      <p class="about-body">Each painting begins with weeks of looking — at light, at form, at the particular quality of stillness in a moment. Works are produced in small series and sold as unique originals. Certificates of authenticity are included with every purchase.</p>
-      <p class="about-location">Studio — Townsville, QLD, Australia</p>
+    <div class="section-header">
+      <h2 class="section-title">About the Artist</h2>
+    </div>
+    <div class="about-layout">
+      <div class="about-photo-wrap">
+        <div class="about-photo-placeholder" id="about-photo">
+          <span class="about-photo-label">Artist photo</span>
+        </div>
+      </div>
+      <div class="about-text">
+        <p class="about-para">Michael van Blerk is a self-taught acrylic and oil painter based in Airlie Beach, Queensland, working in two distinct disciplines — regional landscape and classical figurative painting.</p>
+        <p class="about-para">Drawn to the dramatic light and colour of the Whitsunday region, Michael's seascape work captures the character of one of Australia's most iconic coastlines with bold colour and painterly confidence.</p>
+        <p class="about-para">His figurative work operates in a different register entirely — dark, psychologically intense oil paintings in the tradition of the Baroque masters, exploring sacred and theological subjects with unflinching seriousness and emotional weight.</p>
+        <p class="about-para">Michael exhibits locally and regionally and accepts commissions in both disciplines.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SEASCAPES GALLERY ──────────────────────────────────────────────── -->
+  <section class="section gallery-section" id="seascapes" aria-label="Whitsunday Seascapes">
+    <div class="gallery-section-header">
+      <h2 class="gallery-section-title">Airlie Beach Art — Whitsunday Seascapes</h2>
+      <p class="gallery-section-body">The Whitsunday Islands offer some of the most distinctive natural light in Australia — the particular blue of the Coral Sea, the silica white of Whitehaven Beach, the drama of tropical cloud formations building over the islands.</p>
+      <p class="gallery-section-body">These paintings are direct responses to that environment. Bold in colour, confident in mark making, and painted with genuine affection for a coastline that rewards close looking.</p>
+      <p class="gallery-section-body">Available as original acrylic or oil on canvas in a range of sizes. Commissions welcome — whether you want a specific view, a favourite anchorage, or a memory of time spent on the water.</p>
+    </div>
+    <div class="gallery" id="gallery-seascapes"></div>
+  </section>
+
+  <!-- ── FIGURATIVE GALLERY ─────────────────────────────────────────────── -->
+  <section class="section gallery-section figurative-section" id="figurative" aria-label="Figurative Work">
+    <div class="gallery-section-header">
+      <h2 class="gallery-section-title">Figurative Work</h2>
+      <p class="gallery-section-body">This body of work sits in the tradition of the great Baroque painters — Caravaggio, Rembrandt, Rubens — who understood that the most profound human experiences demand to be painted with weight, darkness, and unflinching honesty.</p>
+      <p class="gallery-section-body">Michael's figurative paintings engage directly with sacred and theological subjects drawn from Scripture, church history, and the great narrative tradition of Western devotional art. These are not decorative works. They are paintings that ask something of the viewer — attention, stillness, and a willingness to sit with difficult and beautiful things simultaneously.</p>
+      <p class="gallery-section-body">Current and recent bodies of work include <em>Behold the Man</em>, a Lenten series on the Passion narrative, and <em>The Expulsion</em>, a large-format treatment of the Fall of Man that places Adam and Eve at the threshold between paradise and the world.</p>
+      <p class="gallery-section-body">These works are painted for spaces that can hold them — private collections, sacred spaces, and serious collectors of figurative and devotional art.</p>
+      <p class="gallery-section-body">Original works are available for sale. Ecclesiastical and private commissions are welcomed and quoted individually — contact Michael to discuss your project.</p>
+      <p class="gallery-section-note"><em>All works are original oil on canvas. Prices listed per work. Commission inquiries welcome.</em></p>
+    </div>
+    <div class="gallery" id="gallery-figurative"></div>
+  </section>
+
+  <!-- ── COMMISSIONS ────────────────────────────────────────────────────── -->
+  <section class="section commissions-section" id="commissions" aria-label="Commissions">
+    <div class="section-header">
+      <h2 class="section-title">Commissions</h2>
+    </div>
+    <div class="commissions-body">
+      <p class="commissions-intro">Michael accepts commissions in both his seascape and figurative disciplines.</p>
+      <div class="commissions-grid">
+        <div class="commission-block">
+          <h3 class="commission-block-title">Seascape Commissions</h3>
+          <p class="commission-block-body">Bring a photograph, a location, or simply a memory of the Whitsundays and Michael will paint it. Quoted based on size and complexity.</p>
+        </div>
+        <div class="commission-block">
+          <h3 class="commission-block-title">Figurative &amp; Devotional Commissions</h3>
+          <p class="commission-block-body">Sacred subjects, theological narratives, portraits in the classical tradition. Each commission is discussed individually to ensure the work serves its intended space and purpose. Ecclesiastical commissions particularly welcome.</p>
+        </div>
+      </div>
+      <p class="commissions-cta">To inquire about a commission, contact Michael directly. All commissions are quoted individually.</p>
+    </div>
+  </section>
+
+  <!-- ── CONTACT ────────────────────────────────────────────────────────── -->
+  <section class="section contact-section" id="contact" aria-label="Contact">
+    <div class="section-header">
+      <h2 class="section-title">Contact</h2>
+    </div>
+    <div class="contact-body">
+      <p class="contact-intro">To purchase a work, inquire about a commission, or discuss an exhibition opportunity, contact Michael directly.</p>
+      <ul class="contact-list">
+        <li class="contact-item">
+          <span class="contact-label">Email</span>
+          <a href="mailto:michael.p.vanblerk@gmail.com" class="contact-link">michael.p.vanblerk@gmail.com</a>
+        </li>
+        <li class="contact-item">
+          <span class="contact-label">Phone</span>
+          <a href="tel:+61467090481" class="contact-link">0467 090 481</a>
+        </li>
+        <li class="contact-item">
+          <span class="contact-label">Instagram</span>
+          <a href="https://instagram.com/contactfitness.store" class="contact-link" target="_blank" rel="noopener noreferrer">instagram.com/contactfitness.store</a>
+        </li>
+      </ul>
+      <p class="contact-location">Based in Airlie Beach, Queensland, Australia.</p>
     </div>
   </section>
 
   <!-- ── FOOTER ────────────────────────────────────────────────────────── -->
   <footer role="contentinfo">
-    <span class="footer-logo">Atelier</span>
-    <span>&#169; 2026 &middot; All works original &middot; Secure payment via Square</span>
+    <span class="footer-logo">Airlie Beach Art</span>
+    <span>&#169; 2026 Michael van Blerk &middot; All works original &middot; Secure payment via Square</span>
     <span class="footer-ssl">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
         <rect x="3" y="11" width="18" height="11" rx="2"/>
@@ -121,9 +190,7 @@
         <button class="close-btn" id="checkout-close-btn" aria-label="Close checkout">&#x2715;</button>
       </div>
       <div class="modal-body" id="checkout-body">
-
         <div class="order-summary" id="order-summary"></div>
-
         <div class="form-section">
           <div class="form-section-title">Contact</div>
           <div class="form-row">
@@ -145,7 +212,6 @@
             <input type="tel" id="phone" autocomplete="tel" placeholder="+61 400 000 000">
           </div>
         </div>
-
         <div class="form-section">
           <div class="form-section-title">Shipping address</div>
           <div class="form-group">
@@ -155,7 +221,7 @@
           <div class="form-row">
             <div class="form-group">
               <label for="city">City</label>
-              <input type="text" id="city" autocomplete="address-level2" placeholder="Townsville">
+              <input type="text" id="city" autocomplete="address-level2" placeholder="Airlie Beach">
             </div>
             <div class="form-group">
               <label for="state">State</label>
@@ -165,7 +231,7 @@
           <div class="form-row">
             <div class="form-group">
               <label for="postcode">Postcode</label>
-              <input type="text" id="postcode" autocomplete="postal-code" placeholder="4810">
+              <input type="text" id="postcode" autocomplete="postal-code" placeholder="4802">
             </div>
             <div class="form-group">
               <label for="country">Country</label>
@@ -173,7 +239,6 @@
             </div>
           </div>
         </div>
-
         <div class="form-section">
           <div class="form-section-title">Payment</div>
           <div id="card-container"></div>
@@ -181,24 +246,16 @@
           <p class="payment-error" id="payment-error" role="alert"></p>
           <button class="pay-btn" id="pay-btn">Complete Purchase</button>
         </div>
-
-      </div><!-- /#checkout-body -->
-
-      <!-- Success state -->
+      </div>
       <div class="success-state" id="success-state" role="status">
         <div class="success-icon" aria-hidden="true">&#10022;</div>
         <h2 class="success-title">Thank you.</h2>
-        <p class="success-sub">
-          Your order has been confirmed and payment received.<br>
-          A confirmation has been sent to your email.<br>
-          Your artwork will be carefully packaged and shipped within 5&#8209;7 business days.
-        </p>
+        <p class="success-sub">Your order has been confirmed and payment received.<br>A confirmation has been sent to your email.<br>Your artwork will be carefully packaged and shipped within 5&#8209;7 business days.</p>
         <p class="success-order" id="success-order-id"></p>
         <button class="success-continue" id="success-continue-btn">Continue Browsing</button>
       </div>
-
-    </div><!-- /.modal -->
-  </div><!-- /#checkout-modal -->
+    </div>
+  </div>
 
   <!-- ── LOGIN MODAL ────────────────────────────────────────────────────── -->
   <div class="login-overlay" id="login-overlay" role="dialog" aria-modal="true" aria-label="Owner login">
@@ -233,15 +290,22 @@
       </div>
       <div class="form-group">
         <label for="new-title">Title</label>
-        <input type="text" id="new-title" placeholder="e.g. Still Life with Roses">
+        <input type="text" id="new-title" placeholder="e.g. Whitehaven at Dusk">
       </div>
       <div class="form-group">
         <label for="new-medium">Medium &amp; dimensions</label>
-        <input type="text" id="new-medium" placeholder="e.g. Oil on linen · 40 × 50 cm">
+        <input type="text" id="new-medium" placeholder="e.g. Acrylic on canvas · 60 × 90 cm">
       </div>
       <div class="form-group">
         <label for="new-price">Price (AUD)</label>
         <input type="number" id="new-price" placeholder="1200" min="0">
+      </div>
+      <div class="form-group">
+        <label for="new-category">Category</label>
+        <select id="new-category">
+          <option value="seascape">Seascape</option>
+          <option value="figurative">Figurative</option>
+        </select>
       </div>
       <div class="form-group-inline">
         <input type="checkbox" id="new-sold">

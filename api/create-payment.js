@@ -3,6 +3,7 @@ import { getIp, checkRateLimit, recordFailedAttempt, clearAttempts } from './_ra
 import { auditLog } from './_auditLog.js';
 import { checkCsrf } from './_csrf.js';
 import { checkBodySize } from './_bodyLimit.js';
+import { capFields } from './_sanitize.js';
 
 const redis = new Redis({
   url:   process.env.UPSTASH_REDIS_REST_URL,
@@ -94,6 +95,18 @@ export default async function handler(req, res) {
   ) {
     return res.status(400).json({ success: false, error: 'Invalid or incomplete form data' });
   }
+
+  // ── Length caps ───────────────────────────────────────────────────────
+  const caps = capFields([
+    ['First name', firstName, 100],
+    ['Last name',  lastName,  100],
+    ['Email',      email,     254],
+    ['Address',    address,   300],
+    ['City',       city,      100],
+    ['Postcode',   postcode,   10],
+    ['Phone',      phone || '', 20],
+  ]);
+  if (!caps.ok) return res.status(400).json({ success: false, error: caps.error });
 
   // ── Reject clearly invalid sourceId format ────────────────────────────
   // Square tokens start with specific prefixes. This blocks obviously garbage input.

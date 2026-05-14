@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   const size = checkBodySize(req, '1kb');
   if (!size.ok) return res.status(413).json({ error: size.error });
 
-  const admin = verifyAdmin(req);
+  const admin = await verifyAdmin(req);
   if (!admin) {
     await auditLog({ action: 'unauthorised', ip: getIp(req), detail: { endpoint: 'toggle-sold' } });
     return res.status(401).json({ error: 'Unauthorized' });
