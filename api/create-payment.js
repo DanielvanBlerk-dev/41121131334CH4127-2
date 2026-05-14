@@ -79,7 +79,7 @@ export default async function handler(req, res) {
     email, firstName, lastName,
     address, city, postcode, phone,
     items = [],
-    postageName, postagePrice,
+    postageQuoteId,
   } = req.body || {};
 
   if (
@@ -97,16 +97,35 @@ export default async function handler(req, res) {
     return res.status(400).json({ success: false, error: 'Invalid or incomplete form data' });
   }
 
-  // ── Validate postage ──────────────────────────────────────────────────
-  // postageName must be a non-empty string, postagePrice must be a positive number.
-  // We trust the price came from the AusPost API via our own postage endpoint —
-  // but we still cap it to a sane maximum to prevent manipulation.
-  if (!isValidString(postageName)) {
-    return res.status(400).json({ success: false, error: 'Invalid postage selection. Please select a postage option.' });
+  // ── Validate postage quote ────────────────────────────────────────────
+  // Look up the quoteId in Redis — the client never sends a price.
+  // Quotes are stored by /api/postage, expire after 15 minutes, and are
+  // deleted after use so they cannot be replayed.
+  if (!postageQuoteId || typeof postageQuoteId !== 'string' || postageQuoteId.length > 64) {
+    return res.status(400).json({ success: false, error: 'Invalid postage selection. Please recalculate postage and try again.' });
   }
-  const postageAmount = parseFloat(postagePrice);
+
+  const quoteKey = `postage-quote:${postageQuoteId}`;
+  const quoteRaw = await redis.get(quoteKey);
+  if (!quoteRaw) {
+    return res.status(400).json({ success: false, error: 'Postage quote has expired. Please recalculate postage and try again.' });
+  }
+
+  let quote;
+  try {
+    quote = typeof quoteRaw === 'string' ? JSON.parse(quoteRaw) : quoteRaw;
+  } catch {
+    return res.status(400).json({ success: false, error: 'Invalid postage quote. Please recalculate postage and try again.' });
+  }
+
+  // Delete the quote immediately — single use only, prevents replay attacks
+  await redis.del(quoteKey);
+
+  const postageAmount = parseFloat(quote.price);
+  const postageName   = quote.name;
+
   if (isNaN(postageAmount) || postageAmount < 0 || postageAmount > 500) {
-    return res.status(400).json({ success: false, error: 'Invalid postage amount.' });
+    return res.status(400).json({ success: false, error: 'Invalid postage amount in quote.' });
   }
 
   // ── Length caps ───────────────────────────────────────────────────────

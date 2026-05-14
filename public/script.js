@@ -526,9 +526,8 @@ async function calculatePostage() {
         radio.value   = i;
         radio.className = 'postage-radio';
         radio.addEventListener('change', () => {
-          selectedPostage = { name: s.name, price: s.price };
+          selectedPostage = { name: s.name, price: s.price, quoteId: s.quoteId };
           updateOrderSummary();
-          // Clear any payment error about missing postage
           el('payment-error').style.display = 'none';
         });
 
@@ -720,19 +719,18 @@ async function processPayment(sourceId, fields) {
       method: 'POST',
       body: JSON.stringify({
         sourceId,
-        currency:      'AUD',
-        email:         recheck.email,
-        firstName:     recheck.firstName,
-        lastName:      recheck.lastName,
-        address:       recheck.address,
-        city:          recheck.city,
-        state:         recheck.state,
-        postcode:      recheck.postcode,
-        phone:         recheck.phone,
-        country:       recheck.country,
-        items:         cart.map(a => ({ id: a.id })),
-        postageName:   selectedPostage.name,
-        postagePrice:  selectedPostage.price,
+        currency:    'AUD',
+        email:       recheck.email,
+        firstName:   recheck.firstName,
+        lastName:    recheck.lastName,
+        address:     recheck.address,
+        city:        recheck.city,
+        state:       recheck.state,
+        postcode:    recheck.postcode,
+        phone:       recheck.phone,
+        country:     recheck.country,
+        items:       cart.map(a => ({ id: a.id })),
+        postageQuoteId: selectedPostage.quoteId,  // server looks this up — client never sets price
       }),
     });
 

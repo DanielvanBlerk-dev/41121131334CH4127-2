@@ -1,21 +1,28 @@
+import { Redis } from '@upstash/redis';
 import { checkBodySize } from './_bodyLimit.js';
 import { checkCsrf } from './_csrf.js';
 import { getIp } from './_rateLimit.js';
 import { auditLog } from './_auditLog.js';
 
-const ORIGIN_POSTCODE = '4802'; // Airlie Beach, QLD
+const redis = new Redis({
+  url:   process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
+
+const ORIGIN_POSTCODE      = '4802';
 const AUSPOST_SERVICES_URL = 'https://digitalapi.auspost.com.au/postage/parcel/domestic/service.json';
+const QUOTE_TTL_SECS       = 15 * 60; // quotes expire after 15 minutes
 
 /**
  * POST /api/postage
- * Public — no auth required.
  * Body: { toPostcode, length, width, height, weight }
  *
- * Uses the Australia Post PAC API two-step process:
- *   Step 1: GET /postage/parcel/domestic/service.json — fetch available services
- *   Step 2: GET /postage/parcel/domestic/calculate.json — calculate price per service
+ * Fetches real postage options from Australia Post, stores each service
+ * as a server-side quote in Redis with a 15-minute TTL, and returns
+ * the options with quoteIds. create-payment.js looks up the quoteId
+ * to get the authoritative price — the client never sets the price.
  *
- * Returns: { services: [ { name, price, deliveryTime }, ... ] }
+ * Returns: { services: [ { quoteId, name, price, deliveryTime }, ... ] }
  */
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -60,14 +67,11 @@ export default async function handler(req, res) {
     weight:        String(parseFloat(weight)),
   });
 
-  const headers = { 'AUTH-KEY': apiKey };
-
   try {
-    // ── Step 1: get available services ───────────────────────────────────
-    const servicesRes = await fetch(
-      `${AUSPOST_SERVICES_URL}?${dimParams}`,
-      { headers }
-    );
+    // ── Fetch services from Australia Post ────────────────────────────────
+    const servicesRes = await fetch(`${AUSPOST_SERVICES_URL}?${dimParams}`, {
+      headers: { 'AUTH-KEY': apiKey },
+    });
 
     if (!servicesRes.ok) {
       const text = await servicesRes.text();
@@ -87,25 +91,40 @@ export default async function handler(req, res) {
     }
 
     const serviceList = Array.isArray(rawServices) ? rawServices : [rawServices];
+    const validServices = serviceList.filter(s => s.code && s.price);
 
-    // Prices are already in the service list — no need for a second calculate call
-    const services = serviceList
-      .filter(s => s.code && s.price)
-      .map(s => ({
-        name:         s.name,
-        price:        parseFloat(s.price),
-        deliveryTime: null, // PAC service endpoint doesn't return delivery time
-      }))
-      .sort((a, b) => a.price - b.price);
-
-    if (services.length === 0) {
+    if (validServices.length === 0) {
       return res.status(200).json({
         services: [],
         message:  'No postage options available for this postcode. Please contact Michael for a quote.',
       });
     }
 
-    return res.status(200).json({ services });
+    // ── Store each service as a server-side quote in Redis ────────────────
+    // Each quote gets a unique ID. create-payment.js looks up the ID to get
+    // the authoritative price — the client cannot alter it.
+    const services = await Promise.all(
+      validServices.map(async s => {
+        const quoteId = crypto.randomUUID();
+        const price   = parseFloat(s.price);
+
+        await redis.set(
+          `postage-quote:${quoteId}`,
+          JSON.stringify({ name: s.name, price }),
+          { ex: QUOTE_TTL_SECS }
+        );
+
+        return {
+          quoteId,
+          name:         s.name,
+          price,
+          deliveryTime: null,
+        };
+      })
+    );
+
+    const sorted = services.sort((a, b) => a.price - b.price);
+    return res.status(200).json({ services: sorted });
 
   } catch (err) {
     console.error('postage error:', err);
