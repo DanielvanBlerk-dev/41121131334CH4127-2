@@ -845,10 +845,16 @@ async function submitContactForm() {
     btn.disabled    = true;
     btn.textContent = 'Sending…';
 
-    await apiFetch('/api/contact', {
+    const data = await apiFetch('/api/contact', {
       method: 'POST',
       body:   JSON.stringify({ name, email, message }),
     });
+
+    if (data.fallback) {
+      // Email not yet configured — show helpful fallback with clickable link
+      errEl.innerHTML = data.error + ' — <a href="mailto:michael.p.vanblerk@gmail.com" style="color:#f5a0a0;">michael.p.vanblerk@gmail.com</a>';
+      return;
+    }
 
     succEl.textContent = 'Message sent — Michael will be in touch soon.';
     el('contact-name').value    = '';

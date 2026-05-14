@@ -83,16 +83,19 @@ export default async function handler(req, res) {
       message: message.trim(),
     });
 
+    // Record the send time for rate limiting regardless of email outcome
+    CONTACT_COOLDOWN.set(ip, Date.now());
+    await auditLog({ action: 'contact_message_sent', ip, detail: { name: name.trim(), emailSent: sent } });
+
     if (!sent) {
-      return res.status(500).json({
-        error: 'Message could not be sent. Please email Michael directly at michael.p.vanblerk@gmail.com',
+      // Email failed (Resend not configured or domain not verified)
+      // Return a helpful fallback rather than an error — not the user's fault
+      return res.status(200).json({
+        success:  false,
+        fallback: true,
+        error:    'The contact form is not yet active. Please email Michael directly at michael.p.vanblerk@gmail.com',
       });
     }
-
-    // Record the send time for rate limiting
-    CONTACT_COOLDOWN.set(ip, Date.now());
-
-    await auditLog({ action: 'contact_message_sent', ip, detail: { name: name.trim() } });
 
     return res.status(200).json({ success: true });
 
