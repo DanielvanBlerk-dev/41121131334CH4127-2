@@ -4,7 +4,7 @@ import { getIp } from './_rateLimit.js';
 import { auditLog } from './_auditLog.js';
 
 const ORIGIN_POSTCODE = '4802'; // Airlie Beach, QLD
-const AUSPOST_BASE    = 'https://digitalapi.auspost.com.au';
+const AUSPOST_SERVICES_URL = 'https://digitalapi.auspost.com.au/postage/parcel/domestic/service.json';
 
 /**
  * POST /api/postage
@@ -65,7 +65,7 @@ export default async function handler(req, res) {
   try {
     // ── Step 1: get available services ───────────────────────────────────
     const servicesRes = await fetch(
-      `${AUSPOST_BASE}/postage/parcel/domestic/service.json?${dimParams}`,
+      `${AUSPOST_SERVICES_URL}?${dimParams}`,
       { headers }
     );
 
@@ -88,36 +88,14 @@ export default async function handler(req, res) {
 
     const serviceList = Array.isArray(rawServices) ? rawServices : [rawServices];
 
-    // ── Step 2: calculate price for each service ──────────────────────────
-    const priceResults = await Promise.all(
-      serviceList.map(async svc => {
-        try {
-          const calcParams = new URLSearchParams(dimParams);
-          calcParams.set('service_code', svc.code);
-
-          const calcRes  = await fetch(
-            `${AUSPOST_BASE}/postage/parcel/domestic/calculate.json?${calcParams}`,
-            { headers }
-          );
-          if (!calcRes.ok) return null;
-
-          const calcData = await calcRes.json();
-          const result   = calcData.postage_result;
-          if (!result?.total_cost) return null;
-
-          return {
-            name:         svc.name,
-            price:        parseFloat(result.total_cost),
-            deliveryTime: result.delivery_time || null,
-          };
-        } catch {
-          return null;
-        }
-      })
-    );
-
-    const services = priceResults
-      .filter(Boolean)
+    // Prices are already in the service list — no need for a second calculate call
+    const services = serviceList
+      .filter(s => s.code && s.price)
+      .map(s => ({
+        name:         s.name,
+        price:        parseFloat(s.price),
+        deliveryTime: null, // PAC service endpoint doesn't return delivery time
+      }))
       .sort((a, b) => a.price - b.price);
 
     if (services.length === 0) {
