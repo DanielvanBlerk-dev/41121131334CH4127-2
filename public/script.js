@@ -824,34 +824,37 @@ async function calculatePostage() {
 
 /* ─── CONTACT FORM ────────────────────────────────────────────────────────── */
 async function submitContactForm() {
-  const name    = el('contact-name').value.trim();
-  const email   = el('contact-email').value.trim();
-  const message = el('contact-message').value.trim();
   const errEl   = el('contact-form-error');
   const succEl  = el('contact-form-success');
   const btn     = el('contact-form-btn');
 
-  errEl.textContent  = '';
-  succEl.textContent = '';
-
-  if (!name)    { errEl.textContent = 'Please enter your name.'; return; }
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    errEl.textContent = 'Please enter a valid email address.'; return;
-  }
-  if (!message) { errEl.textContent = 'Please enter a message.'; return; }
-
-  btn.disabled    = true;
-  btn.textContent = 'Sending…';
-
   try {
+    const name    = el('contact-name').value.trim();
+    const email   = el('contact-email').value.trim();
+    const message = el('contact-message').value.trim();
+
+    errEl.textContent  = '';
+    succEl.textContent = '';
+
+    if (!name)    { errEl.textContent = 'Please enter your name.'; return; }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errEl.textContent = 'Please enter a valid email address.'; return;
+    }
+    if (!message) { errEl.textContent = 'Please enter a message.'; return; }
+
+    btn.disabled    = true;
+    btn.textContent = 'Sending…';
+
     await apiFetch('/api/contact', {
       method: 'POST',
       body:   JSON.stringify({ name, email, message }),
     });
+
     succEl.textContent = 'Message sent — Michael will be in touch soon.';
     el('contact-name').value    = '';
     el('contact-email').value   = '';
     el('contact-message').value = '';
+
   } catch (e) {
     errEl.textContent = e.message || 'Message could not be sent. Please email Michael directly.';
   } finally {
