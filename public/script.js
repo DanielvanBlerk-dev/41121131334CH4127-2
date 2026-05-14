@@ -138,7 +138,6 @@ function buildCard(art) {
     const img = document.createElement('img');
     img.src = art.imgUrl || art.imgData;
     img.alt = art.title;
-    img.loading = 'lazy'; // native lazy loading — images load as they scroll into view
     imgWrap.appendChild(img);
   } else if (art.svg) {
     imgWrap.innerHTML = art.svg;

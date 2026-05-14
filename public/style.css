@@ -214,10 +214,9 @@ nav {
   width: 100%; background: var(--parchment);
   overflow: hidden; position: relative; margin-bottom: 1rem;
   border: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: center;
-  aspect-ratio: 3 / 4; /* default portrait — expands naturally for landscape images */
+  display: block;
 }
-.artwork-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.artwork-img img { width: 100%; height: auto; display: block; }
 .artwork-img svg { width: 100%; height: auto; display: block; }
 .sold-overlay {
   position: absolute; inset: 0; background: rgba(249,246,241,0.85);
