@@ -42,13 +42,22 @@ const ALLOWED_ORIGINS = (() => {
  * Returns { ok: false, reason: string } on failure.
  */
 export function checkCsrf(req) {
-  // 1. Custom header — must be present
+  // 1. Custom header — must always be present.
+  // This alone is sufficient CSRF protection when ALLOWED_ORIGINS is not configured,
+  // because browsers cannot set custom headers on cross-origin requests without a
+  // CORS preflight — which our server does not permit.
   const customHeader = req.headers['x-requested-with'];
   if (!customHeader || customHeader !== 'XMLHttpRequest') {
     return { ok: false, reason: 'Missing or invalid X-Requested-With header' };
   }
 
-  // 2. Origin / Referer check
+  // 2. Origin / Referer check — only enforced when ALLOWED_ORIGINS is configured.
+  // If not configured, fall through and rely on the custom header check above.
+  if (ALLOWED_ORIGINS.length === 0) {
+    console.warn('CSRF: ALLOWED_ORIGIN env var not set — skipping origin check. Set it in Vercel for full protection.');
+    return { ok: true };
+  }
+
   const origin  = req.headers['origin']  || '';
   const referer = req.headers['referer'] || '';
 
@@ -70,7 +79,7 @@ export function checkCsrf(req) {
     return { ok: true };
   }
 
-  // Neither Origin nor Referer present — reject
-  // (legitimate same-origin browser requests always send at least one)
+  // Neither Origin nor Referer present — reject.
+  // Legitimate same-origin browser requests always send at least one.
   return { ok: false, reason: 'No Origin or Referer header present' };
 }

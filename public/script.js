@@ -162,9 +162,14 @@ async function attemptLogin() {
     closeLogin();
     activateAdminMode();
   } catch (e) {
-    el('login-error').textContent = e.status === 401 ? 'Incorrect password.' : 'Login failed. Please try again.';
+    const msg =
+      e.status === 401 ? 'Incorrect password.' :
+      e.status === 403 ? 'Login blocked. Ensure ALLOWED_ORIGIN is set in Vercel.' :
+      e.status === 429 ? (e.message || 'Too many attempts. Please wait before trying again.') :
+      'Login failed. Please try again.';
+    el('login-error').textContent = msg;
     el('admin-pw').value = '';
-    el('admin-pw').focus();
+    setTimeout(() => el('admin-pw').focus(), 50);
   } finally {
     btnEl.disabled    = false;
     btnEl.textContent = 'Sign in';
