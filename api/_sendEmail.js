@@ -183,3 +183,69 @@ export async function sendPurchaseNotification({
     html,
   });
 }
+
+/**
+ * Sends a contact form message to the admin.
+ *
+ * @param {object} opts
+ * @param {string} opts.name    - sender's name
+ * @param {string} opts.email   - sender's email
+ * @param {string} opts.message - message body
+ */
+export async function sendContactEmail({ name, email, message }) {
+  const adminEmail = process.env.ADMIN_EMAIL || 'michael.p.vanblerk@gmail.com';
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f9f6f1;font-family:'Courier New',monospace;font-size:13px;color:#1a1612;">
+  <div style="max-width:580px;margin:40px auto;background:#fff;border:1px solid rgba(26,22,18,0.12);">
+
+    <div style="background:#1a1612;padding:24px 32px;">
+      <p style="margin:0;font-family:Georgia,serif;font-size:22px;font-weight:300;color:#f9f6f1;letter-spacing:0.1em;text-transform:uppercase;">
+        Airlie Beach Art
+      </p>
+      <p style="margin:6px 0 0;font-size:11px;color:#b8965a;letter-spacing:0.15em;text-transform:uppercase;">
+        New message from your website
+      </p>
+    </div>
+
+    <div style="padding:32px;">
+
+      <p style="margin:0 0 16px;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#b8965a;border-bottom:1px solid #ede9e1;padding-bottom:8px;">
+        From
+      </p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+        <tr>
+          <td style="padding:6px 12px;width:80px;color:#7a7368;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;">Name</td>
+          <td style="padding:6px 12px;">${name}</td>
+        </tr>
+        <tr style="background:#f9f6f1;">
+          <td style="padding:6px 12px;color:#7a7368;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;">Email</td>
+          <td style="padding:6px 12px;"><a href="mailto:${email}" style="color:#1a1612;">${email}</a></td>
+        </tr>
+      </table>
+
+      <p style="margin:0 0 16px;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#b8965a;border-bottom:1px solid #ede9e1;padding-bottom:8px;">
+        Message
+      </p>
+      <div style="padding:16px;background:#f9f6f1;border:1px solid #ede9e1;line-height:1.8;white-space:pre-wrap;">${message}</div>
+
+      <p style="margin:24px 0 0;font-size:11px;color:#7a7368;line-height:1.7;">
+        Reply directly to
+        <a href="mailto:${email}" style="color:#b8965a;">${email}</a>
+        to respond to this message.
+      </p>
+
+    </div>
+  </div>
+</body>
+</html>`;
+
+  return sendEmail({
+    to:      adminEmail,
+    subject: `New message from ${name} — Airlie Beach Art`,
+    html,
+  });
+}

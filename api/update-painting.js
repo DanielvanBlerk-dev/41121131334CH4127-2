@@ -20,7 +20,7 @@ export default async function handler(req, res) {
   if (req.method !== 'PUT') return res.status(405).json({ error: 'Method not allowed' });
 
   // ── Body size limit (5mb — may include updated image) ─────────────────
-  const size = checkBodySize(req, '5mb');
+  const size = checkBodySize(req, '4mb');
   if (!size.ok) return res.status(413).json({ error: size.error });
 
   const admin = await verifyAdmin(req);

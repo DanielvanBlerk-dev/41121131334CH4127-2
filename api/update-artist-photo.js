@@ -27,7 +27,7 @@ export default async function handler(req, res) {
 
   const ip = getIp(req);
 
-  const size = checkBodySize(req, '5mb');
+  const size = checkBodySize(req, '4mb');
   if (!size.ok) return res.status(413).json({ error: size.error });
 
   const csrf = checkCsrf(req);

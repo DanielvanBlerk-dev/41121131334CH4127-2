@@ -24,16 +24,26 @@ let artistPhoto     = null; // base64 data URI of artist photo, loaded from Redi
 async function apiFetch(path, options = {}) {
   const token = getToken();
   const headers = {
-    'Content-Type':    'application/json',
-    'X-Requested-With': 'XMLHttpRequest',  // CSRF protection — required by all mutating endpoints
+    'Content-Type':     'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
     ...(options.headers || {}),
   };
   if (token) headers['Authorization'] = 'Bearer ' + token;
 
   const res = await fetch(path, { ...options, headers });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw Object.assign(new Error(err.error || 'Request failed'), { status: res.status });
+    // Vercel may return non-JSON for its own errors (e.g. 413 body too large)
+    let errMsg = res.statusText || 'Request failed';
+    try {
+      const err = await res.json();
+      errMsg = err.error || err.message || errMsg;
+    } catch {
+      // Response wasn't JSON — use a friendly message based on status
+      if (res.status === 413) {
+        errMsg = 'The file is too large. Please resize the image to under 2MB and try again.';
+      }
+    }
+    throw Object.assign(new Error(errMsg), { status: res.status });
   }
   return res.json();
 }
@@ -812,6 +822,43 @@ async function calculatePostage() {
   }
 }
 
+/* ─── CONTACT FORM ────────────────────────────────────────────────────────── */
+async function submitContactForm() {
+  const name    = el('contact-name').value.trim();
+  const email   = el('contact-email').value.trim();
+  const message = el('contact-message').value.trim();
+  const errEl   = el('contact-form-error');
+  const succEl  = el('contact-form-success');
+  const btn     = el('contact-form-btn');
+
+  errEl.textContent  = '';
+  succEl.textContent = '';
+
+  if (!name)    { errEl.textContent = 'Please enter your name.'; return; }
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    errEl.textContent = 'Please enter a valid email address.'; return;
+  }
+  if (!message) { errEl.textContent = 'Please enter a message.'; return; }
+
+  btn.disabled    = true;
+  btn.textContent = 'Sending…';
+
+  try {
+    await apiFetch('/api/contact', {
+      method: 'POST',
+      body:   JSON.stringify({ name, email, message }),
+    });
+    succEl.textContent = 'Message sent — Michael will be in touch soon.';
+    el('contact-name').value    = '';
+    el('contact-email').value   = '';
+    el('contact-message').value = '';
+  } catch (e) {
+    errEl.textContent = e.message || 'Message could not be sent. Please email Michael directly.';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Send message';
+  }
+}
 
 async function initSquare() {
   if (!window.Square) { showPaymentError('Square failed to load. Check your connection.'); return; }
@@ -1081,6 +1128,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   el('img-upload-area').addEventListener('click', () => el('img-file').click());
   el('img-file').addEventListener('change', handleImgUpload);
   el('save-painting-btn').addEventListener('click', saveNewPainting);
+
+  // Contact form
+  el('contact-form-btn').addEventListener('click', submitContactForm);
 
   // Delete confirm
   el('confirm-cancel-btn').addEventListener('click', closeConfirm);
