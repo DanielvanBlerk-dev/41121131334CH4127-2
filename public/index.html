@@ -448,15 +448,29 @@
       <button class="close-btn" id="add-panel-close-btn" aria-label="Close panel">&#x2715;</button>
     </div>
     <div class="add-panel-body">
-      <div class="img-upload-area" id="img-upload-area" role="button" tabindex="0" aria-label="Upload painting image">
-        <input type="file" id="img-file" accept="image/*" class="file-input-hidden">
-        <div id="img-placeholder">
-          <div class="upload-icon">+</div>
-          <div class="upload-hint">Click to upload image</div>
-          <div class="upload-types">JPG, PNG, WEBP</div>
+
+      <!--
+        MULTI-IMAGE UPLOAD AREA
+        Replaces the old single-image upload area.
+        - Clicking the "+ Add photos" button triggers the hidden file input
+        - The file input has multiple attribute so the user can select several at once
+        - Thumbnails are rendered into #img-strip by script.js
+        - Each thumbnail has a remove (×) button managed by script.js
+      -->
+      <div class="img-upload-section">
+        <div class="img-strip" id="img-strip">
+          <!-- Thumbnail tiles injected here by script.js -->
         </div>
-        <img id="img-preview-el" class="img-preview" alt="Preview of uploaded painting">
+        <div class="img-strip-add" id="img-strip-add">
+          <input type="file" id="img-file" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="file-input-hidden">
+          <button class="img-strip-add-btn" id="img-strip-add-btn" type="button" aria-label="Add photos">
+            <span class="img-strip-add-icon">+</span>
+            <span class="img-strip-add-label">Add photos</span>
+            <span class="img-strip-add-types">JPG, PNG, WEBP · max 10</span>
+          </button>
+        </div>
       </div>
+
       <div class="form-group">
         <label for="new-title">Title</label>
         <input type="text" id="new-title" placeholder="e.g. Whitehaven at Dusk">
@@ -529,6 +543,36 @@
         <button class="confirm-cancel" id="confirm-cancel-btn">Cancel</button>
         <button class="confirm-delete" id="confirm-delete-btn">Remove</button>
       </div>
+    </div>
+  </div>
+
+  <!--
+    ── LIGHTBOX ──────────────────────────────────────────────────────────────
+    Always in the DOM, shown/hidden via .open class.
+    Structure:
+      .lightbox-overlay        full-screen dark backdrop + click-to-close
+        .lightbox-inner        centres the image and nav
+          .lightbox-img-wrap   constrains image to viewport
+            img#lightbox-img   the full-size image
+          .lightbox-nav-prev   left arrow button
+          .lightbox-nav-next   right arrow button
+        .lightbox-meta         title + image counter below image
+        .lightbox-dots         dot indicators (one per image)
+      button#lightbox-close    top-right × button
+  -->
+  <div class="lightbox-overlay" id="lightbox-overlay" role="dialog" aria-modal="true" aria-label="Image viewer">
+    <button class="lightbox-close" id="lightbox-close" aria-label="Close image viewer">&#x2715;</button>
+    <div class="lightbox-inner">
+      <div class="lightbox-img-wrap">
+        <img id="lightbox-img" src="" alt="" class="lightbox-img">
+      </div>
+      <button class="lightbox-nav lightbox-nav-prev" id="lightbox-prev" aria-label="Previous image">&#8592;</button>
+      <button class="lightbox-nav lightbox-nav-next" id="lightbox-next" aria-label="Next image">&#8594;</button>
+    </div>
+    <div class="lightbox-footer">
+      <p class="lightbox-title" id="lightbox-title"></p>
+      <p class="lightbox-counter" id="lightbox-counter"></p>
+      <div class="lightbox-dots" id="lightbox-dots"></div>
     </div>
   </div>
 

@@ -215,6 +215,7 @@ nav {
   overflow: hidden; position: relative; margin-bottom: 1rem;
   border: 1px solid var(--border);
   display: block;
+  cursor: pointer;  /* indicates the image is clickable */
 }
 .artwork-img img { width: 100%; height: auto; display: block; }
 .artwork-img svg { width: 100%; height: auto; display: block; }
@@ -223,6 +224,17 @@ nav {
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
 }
+
+/* Badge shown on cards that have more than one image */
+.artwork-img-count {
+  position: absolute; bottom: 8px; right: 8px;
+  background: rgba(26,22,18,0.65); color: rgba(255,255,255,0.9);
+  font-family: 'DM Mono', monospace;
+  font-size: 9px; letter-spacing: 0.1em;
+  padding: 3px 7px;
+  pointer-events: none; /* badge is decorative — click goes to the image */
+}
+
 .artwork-label { display: flex; justify-content: space-between; align-items: baseline; }
 .artwork-title { font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 400; font-style: italic; }
 .artwork-price { font-size: 12px; color: var(--gold); letter-spacing: 0.08em; }
@@ -464,12 +476,6 @@ nav {
 }
 .add-panel-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; font-weight: 300; }
 .add-panel-body { flex: 1; overflow-y: auto; padding: 2rem; }
-.img-upload-area {
-  border: 1px dashed var(--gold); padding: 2rem; text-align: center; cursor: pointer;
-  transition: background 0.2s; margin-bottom: 1.5rem; background: var(--parchment);
-}
-.img-upload-area:hover { background: #e8e2d6; }
-.img-preview { max-width: 100%; max-height: 200px; object-fit: contain; margin-top: 12px; display: none; }
 .add-panel-footer { padding: 1.5rem 2rem; border-top: 1px solid var(--border); background: var(--parchment); }
 .save-btn {
   width: 100%; padding: 14px; background: var(--gold); color: #fff; border: none; cursor: pointer;
@@ -477,9 +483,6 @@ nav {
   text-transform: uppercase; transition: background 0.2s;
 }
 .save-btn:hover { background: var(--gold-light); }
-.upload-icon { font-size: 24px; margin-bottom: 8px; color: var(--gold); }
-.upload-hint { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
-.upload-types { font-size: 10px; color: var(--muted); margin-top: 4px; }
 .form-group-inline { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
 .checkbox-label { margin: 0; text-transform: none; letter-spacing: 0; font-size: 12px; }
 .add-error { color: #c0392b; font-size: 11px; margin-top: 8px; min-height: 16px; }
@@ -796,4 +799,273 @@ footer {
 }
 .contact-form-success {
   color: #a0d4a0; font-size: 11px; margin-top: 10px; min-height: 16px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   NEW STYLES — multi-image upload strip + lightbox
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── MULTI-IMAGE UPLOAD STRIP (admin add panel) ──────────────────────────── */
+
+/*
+  Container for the whole upload section — strip tiles + add button sit
+  side by side and wrap naturally when there are many images.
+*/
+.img-upload-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 1.5rem;
+  align-items: flex-start;
+}
+
+/*
+  The strip itself holds the thumbnail tiles.
+  It's a flex row that wraps, sitting alongside the add button.
+*/
+.img-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/*
+  Individual thumbnail tile.
+  Position relative so the × remove button can sit in the top-right corner.
+*/
+.img-strip-thumb {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border: 1px solid var(--border);
+  background: var(--parchment);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.img-strip-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Remove button overlaid in the top-right corner of each thumbnail */
+.img-strip-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  background: rgba(26,22,18,0.7);
+  color: rgba(255,255,255,0.9);
+  border: none;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.15s;
+}
+.img-strip-remove:hover { background: #c0392b; }
+
+/*
+  The persistent "+ Add photos" tile — styled to match the strip thumbnails
+  in size so it sits flush in the same row. Hidden via JS when 10 images reached.
+*/
+.img-strip-add {
+  flex-shrink: 0;
+}
+.img-strip-add-btn {
+  width: 80px;
+  height: 80px;
+  border: 1px dashed var(--gold);
+  background: var(--parchment);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  transition: background 0.2s;
+  padding: 4px;
+}
+.img-strip-add-btn:hover { background: #e8e2d6; }
+.img-strip-add-icon {
+  font-size: 20px;
+  color: var(--gold);
+  line-height: 1;
+}
+.img-strip-add-label {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.img-strip-add-types {
+  font-size: 8px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.3;
+}
+
+/* ─── LIGHTBOX ────────────────────────────────────────────────────────────── */
+
+/*
+  Full-screen dark backdrop.
+  z-index 700 — above everything including the delete confirm (600)
+  and login overlay (500).
+*/
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 700;
+  background: rgba(10,8,6,0.94);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s;
+  padding: 2rem;
+}
+.lightbox-overlay.open {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* Close button — top right corner, always visible */
+.lightbox-close {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.5rem;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.5);
+  font-family: 'DM Mono', monospace;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  transition: color 0.2s;
+  z-index: 1;
+}
+.lightbox-close:hover { color: #fff; }
+
+/*
+  Inner wrapper — centres the image and positions the nav arrows
+  relative to the image, not the whole screen.
+*/
+.lightbox-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 1100px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Image container — constrains to viewport */
+.lightbox-img-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-height: calc(100vh - 160px); /* leave room for footer */
+  width: 100%;
+}
+.lightbox-img {
+  max-width: 100%;
+  max-height: calc(100vh - 160px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  /* Subtle fade between images */
+  transition: opacity 0.18s ease;
+}
+.lightbox-img.fading { opacity: 0; }
+
+/* Prev / Next arrow buttons */
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.7);
+  font-size: 20px;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+  flex-shrink: 0;
+}
+.lightbox-nav:hover { background: rgba(255,255,255,0.16); color: #fff; }
+.lightbox-nav:disabled { opacity: 0.2; cursor: default; }
+.lightbox-nav-prev { left: 0; }
+.lightbox-nav-next { right: 0; }
+
+/* Hidden when there's only one image */
+.lightbox-nav.hidden { display: none; }
+
+/* Footer: title + counter + dots */
+.lightbox-footer {
+  text-align: center;
+  padding-top: 1rem;
+  flex-shrink: 0;
+}
+.lightbox-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 18px;
+  font-weight: 300;
+  font-style: italic;
+  color: rgba(255,255,255,0.85);
+  margin-bottom: 0.25rem;
+}
+.lightbox-counter {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: rgba(255,255,255,0.35);
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+}
+
+/* Dot indicators */
+.lightbox-dots {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+.lightbox-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s, transform 0.2s;
+}
+.lightbox-dot.active {
+  background: var(--gold);
+  transform: scale(1.25);
+}
+/* Hide dots when there's only one image */
+.lightbox-dots:has(.lightbox-dot:only-child) { display: none; }
+
+/* ─── LIGHTBOX RESPONSIVE ─────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .lightbox-overlay { padding: 1rem; }
+  .lightbox-nav { width: 36px; height: 36px; font-size: 16px; }
+  .lightbox-img-wrap,
+  .lightbox-img { max-height: calc(100vh - 140px); }
+  .lightbox-title { font-size: 15px; }
 }
