@@ -1,12 +1,11 @@
 import { Redis } from '@upstash/redis';
-import { put, del } from '@vercel/blob';
+import { del } from '@vercel/blob';
 import { verifyAdmin } from './_verifyAdmin.js';
 import { sanitizeString, capFields } from './_sanitize.js';
 import { getIp } from './_rateLimit.js';
 import { auditLog } from './_auditLog.js';
 import { checkCsrf } from './_csrf.js';
 import { checkBodySize } from './_bodyLimit.js';
-import { validateImage } from './_imageValidator.js';
 
 const redis = new Redis({
   url:   process.env.UPSTASH_REDIS_REST_URL,
@@ -15,30 +14,6 @@ const redis = new Redis({
 
 function isValidString(str) {
   return typeof str === 'string' && str.trim().length > 0 && !/[<>]/.test(str);
-}
-
-/**
- * Uploads a validated base64 image to Vercel Blob.
- * Returns the public CDN URL.
- * Throws on failure.
- *
- * @param {string} imgData   base64 data URI (e.g. "data:image/jpeg;base64,...")
- * @param {string} filename  e.g. "paintings/painting-1234567890-0.jpg"
- * @returns {Promise<string>} public CDN URL
- */
-async function uploadToBlob(imgData, filename) {
-  const base64  = imgData.includes(',') ? imgData.split(',')[1] : imgData;
-  const buffer  = Buffer.from(base64, 'base64');
-  const mimeMatch = imgData.match(/^data:([^;]+);base64,/);
-  const mimeType  = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-
-  const blob = await put(filename, buffer, {
-    access:          'public',
-    contentType:     mimeType,
-    addRandomSuffix: false,
-  });
-
-  return blob.url;
 }
 
 /**
@@ -58,57 +33,37 @@ async function deleteAllBlobs(images = []) {
 }
 
 /**
- * Validates and uploads an array of base64 image strings to Vercel Blob.
- * Returns an array of CDN URLs in the same order.
- * Throws with { error, index } on the first validation failure.
- * Throws on Blob upload failure.
- *
- * @param {string[]} imgDataArray  Array of base64 data URIs
- * @param {number}   artworkId     Used to build filenames
- * @param {number}   [startIndex]  Index offset for filenames when appending
- * @returns {Promise<string[]>}    Array of CDN URLs
- */
-async function validateAndUploadImages(imgDataArray, artworkId, startIndex = 0) {
-  const urls = [];
-
-  for (let i = 0; i < imgDataArray.length; i++) {
-    const imgData  = imgDataArray[i];
-    const imgCheck = validateImage(imgData);
-
-    if (!imgCheck.ok) {
-      throw { validationError: true, error: imgCheck.error, index: i };
-    }
-
-    const ext      = imgCheck.format.split('/')[1] || 'jpg';
-    const filename = `paintings/painting-${artworkId}-${startIndex + i}.${ext}`;
-
-    const url = await uploadToBlob(imgData, filename);
-    urls.push(url);
-  }
-
-  return urls;
-}
-
-/**
  * /api/paintings — consolidated paintings management endpoint
  *
- * POST   → add a new painting    (images[] → Vercel Blob CDN)
- * PUT    → update a painting     (add new images, remove specified old ones)
- * DELETE → delete a painting     (also deletes all blobs from CDN)
+ * POST   → create a new painting record (no images — client uploads images
+ *           separately via POST /api/upload-image after receiving the new ID)
+ * PUT    → update painting metadata + optionally remove specific images
+ *           (adding new images is also done via /api/upload-image)
+ * DELETE → delete a painting and all its associated blobs from CDN
  * PATCH  → toggle sold status
  *
- * Multi-image data model:
- *   artwork.images = string[]   — ordered array of CDN URLs
+ * Image upload flow (POST):
+ *   1. Client calls POST /api/paintings with metadata only → receives { id }
+ *   2. Client calls POST /api/upload-image once per image, passing the id
+ *   3. Each upload-image call validates, uploads to Blob, appends URL to
+ *      artwork's images[] in Redis independently
  *
- * Legacy single-image records (artwork.imgUrl) are handled transparently
- * by get-artworks.js which normalises them to images: [imgUrl].
- * paintings.js always writes the new images[] shape.
+ *   This design means each request body is always one image (≤4MB decoded),
+ *   so Vercel's hard ~4.5MB request body limit is never a constraint regardless
+ *   of how many images a painting has.
+ *
+ * Image removal flow (PUT):
+ *   Client sends removeImageUrls: string[] — existing CDN URLs to delete.
+ *   Server verifies each URL belongs to this artwork before deleting.
+ *   Adding new images after a PUT is done via /api/upload-image as above.
  */
 export default async function handler(req, res) {
   const ip = getIp(req);
 
   // ── Shared: body size limit ───────────────────────────────────────────
-  const maxSize = req.method === 'POST' || req.method === 'PUT' ? '4mb' : '1kb';
+  // POST and PUT carry only text metadata now (no images) so 10kb is ample.
+  // DELETE and PATCH carry just an id, so 1kb.
+  const maxSize = req.method === 'POST' || req.method === 'PUT' ? '10kb' : '1kb';
   const size    = checkBodySize(req, maxSize);
   if (!size.ok) return res.status(413).json({ error: size.error });
 
@@ -129,18 +84,19 @@ export default async function handler(req, res) {
   // ── Route by method ───────────────────────────────────────────────────
   switch (req.method) {
 
-    // ── POST — add painting ─────────────────────────────────────────────
+    // ── POST — create painting record ───────────────────────────────────
+    // Images are NOT accepted here. The client uploads images separately
+    // via /api/upload-image after receiving the artwork ID from this response.
     case 'POST': {
       const {
         title, medium, price, sold = false,
-        imgDataArray = [],          // NEW: array of base64 data URIs
         category = 'seascape',
         weight, length, width, height,
       } = req.body || {};
 
-      // ── Validate text fields ──────────────────────────────────────────
+      // ── Validate text fields ────────────────────────────────────────
       if (!isValidString(title) || !isValidString(medium) || typeof price !== 'number' || price < 0) {
-        return res.status(400).json({ success: false, error: 'Invalid artwork data' });
+        return res.status(400).json({ success: false, error: 'Invalid artwork data.' });
       }
       if (!['seascape', 'figurative'].includes(category)) {
         return res.status(400).json({ success: false, error: 'Invalid category. Must be seascape or figurative.' });
@@ -153,32 +109,8 @@ export default async function handler(req, res) {
       const caps = capFields([['Title', title, 200], ['Medium', medium, 300]]);
       if (!caps.ok) return res.status(400).json({ success: false, error: caps.error });
 
-      // ── Validate imgDataArray ─────────────────────────────────────────
-      if (!Array.isArray(imgDataArray)) {
-        return res.status(400).json({ success: false, error: 'imgDataArray must be an array.' });
-      }
-      if (imgDataArray.length > 10) {
-        return res.status(400).json({ success: false, error: 'Maximum 10 images per painting.' });
-      }
-
-      const id = Date.now();
-
-      // ── Upload images to Blob ─────────────────────────────────────────
-      let images = [];
-      if (imgDataArray.length > 0) {
-        try {
-          images = await validateAndUploadImages(imgDataArray, id, 0);
-        } catch (err) {
-          if (err.validationError) {
-            await auditLog({ action: 'image_rejected', ip, detail: { endpoint: 'paintings:POST', reason: err.error, index: err.index } });
-            return res.status(400).json({ success: false, error: `Image ${err.index + 1}: ${err.error}` });
-          }
-          console.error('Blob upload failed:', err);
-          return res.status(500).json({ success: false, error: 'Image upload failed. Please try again.' });
-        }
-      }
-
-      // ── Save to Redis ─────────────────────────────────────────────────
+      // ── Save record with empty images[] ────────────────────────────
+      const id       = Date.now();
       const artworks = (await redis.get('artworks')) || [];
       artworks.push({
         id,
@@ -187,7 +119,7 @@ export default async function handler(req, res) {
         medium:  sanitizeString(medium),
         price,
         sold:    Boolean(sold),
-        images,          // array of CDN URLs (may be empty if no images uploaded)
+        images:  [],     // populated by subsequent /api/upload-image calls
         imgUrl:  null,   // legacy field — always null on new records
         imgData: null,   // never store base64 in Redis
         svg:     null,
@@ -199,22 +131,25 @@ export default async function handler(req, res) {
         },
       });
       await redis.set('artworks', artworks);
-      await auditLog({ action: 'add_painting', ip, detail: { id, title: sanitizeString(title), price, imageCount: images.length } });
+      await auditLog({ action: 'add_painting', ip, detail: { id, title: sanitizeString(title), price } });
+
+      // Return the new ID so the client can attach images to it
       return res.status(200).json({ success: true, id });
     }
 
-    // ── PUT — update painting ───────────────────────────────────────────
+    // ── PUT — update painting metadata ──────────────────────────────────
+    // To REMOVE existing images: pass removeImageUrls (CDN URLs to delete).
+    // To ADD new images: call /api/upload-image after this request completes.
     case 'PUT': {
       const {
         id, title, medium, price, sold,
-        imgDataArray   = [],    // NEW: additional images to upload and append
-        removeImageUrls = [],   // NEW: existing CDN URLs to delete
+        removeImageUrls = [],   // existing CDN URLs to delete from this painting
         weight, length, width, height,
       } = req.body || {};
 
-      // ── Validate text fields ──────────────────────────────────────────
+      // ── Validate text fields ────────────────────────────────────────
       if (!id || !isValidString(title) || !isValidString(medium) || typeof price !== 'number' || price < 0) {
-        return res.status(400).json({ success: false, error: 'Invalid artwork data' });
+        return res.status(400).json({ success: false, error: 'Invalid artwork data.' });
       }
       for (const [key, val] of Object.entries({ weight, length, width, height })) {
         if (isNaN(parseFloat(val)) || parseFloat(val) <= 0) {
@@ -224,28 +159,25 @@ export default async function handler(req, res) {
       const caps = capFields([['Title', title, 200], ['Medium', medium, 300]]);
       if (!caps.ok) return res.status(400).json({ success: false, error: caps.error });
 
-      // ── Validate array inputs ─────────────────────────────────────────
-      if (!Array.isArray(imgDataArray)) {
-        return res.status(400).json({ success: false, error: 'imgDataArray must be an array.' });
-      }
       if (!Array.isArray(removeImageUrls)) {
         return res.status(400).json({ success: false, error: 'removeImageUrls must be an array.' });
       }
 
-      // ── Fetch existing artwork ────────────────────────────────────────
+      // ── Fetch existing artwork ──────────────────────────────────────
       let artworks = (await redis.get('artworks')) || [];
       const numId  = Number(id);
       const idx    = artworks.findIndex(a => Number(a.id) === numId);
-      if (idx === -1) return res.status(404).json({ success: false, error: 'Artwork not found' });
+      if (idx === -1) return res.status(404).json({ success: false, error: 'Artwork not found.' });
 
-      // ── Build current images list (normalise legacy imgUrl) ───────────
-      const existing = artworks[idx];
-      let currentImages = Array.isArray(existing.images) && existing.images.length > 0
+      // ── Normalise images[] (handle legacy imgUrl shape) ────────────
+      const existing     = artworks[idx];
+      let currentImages  = Array.isArray(existing.images) && existing.images.length > 0
         ? [...existing.images]
         : (existing.imgUrl ? [existing.imgUrl] : []);
 
-      // ── Remove images flagged for deletion ────────────────────────────
-      // Only delete blobs that actually belong to this artwork (security)
+      // ── Remove flagged images ───────────────────────────────────────
+      // Only delete blobs that actually belong to this artwork (prevents
+      // a malicious removeImageUrls from deleting another painting's blobs).
       const safeToRemove = removeImageUrls.filter(url =>
         typeof url === 'string' &&
         url.includes('blob.vercel-storage.com') &&
@@ -254,29 +186,7 @@ export default async function handler(req, res) {
       await Promise.all(safeToRemove.map(url => deleteBlob(url)));
       currentImages = currentImages.filter(url => !safeToRemove.includes(url));
 
-      // ── Upload and append new images ──────────────────────────────────
-      const totalAfterAdd = currentImages.length + imgDataArray.length;
-      if (totalAfterAdd > 10) {
-        return res.status(400).json({ success: false, error: `Too many images. Maximum is 10 (currently ${currentImages.length}, adding ${imgDataArray.length}).` });
-      }
-
-      if (imgDataArray.length > 0) {
-        try {
-          // Use timestamp suffix to avoid filename collision with existing blobs
-          const startIndex = Date.now();
-          const newUrls    = await validateAndUploadImages(imgDataArray, numId, startIndex);
-          currentImages    = [...currentImages, ...newUrls];
-        } catch (err) {
-          if (err.validationError) {
-            await auditLog({ action: 'image_rejected', ip, detail: { endpoint: 'paintings:PUT', reason: err.error, index: err.index } });
-            return res.status(400).json({ success: false, error: `Image ${err.index + 1}: ${err.error}` });
-          }
-          console.error('Blob upload failed:', err);
-          return res.status(500).json({ success: false, error: 'Image upload failed. Please try again.' });
-        }
-      }
-
-      // ── Save updated record ───────────────────────────────────────────
+      // ── Save updated record ─────────────────────────────────────────
       artworks[idx] = {
         ...existing,
         title:   sanitizeString(title),
@@ -299,18 +209,17 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true });
     }
 
-    // ── DELETE — remove painting ────────────────────────────────────────
+    // ── DELETE — remove painting and all its blobs ──────────────────────
     case 'DELETE': {
       const { id } = req.body || {};
-      if (!id) return res.status(400).json({ success: false, error: 'Missing id' });
+      if (!id) return res.status(400).json({ success: false, error: 'Missing id.' });
 
       let artworks = (await redis.get('artworks')) || [];
       const numId  = Number(id);
       const target = artworks.find(a => Number(a.id) === numId);
-      if (!target) return res.status(404).json({ success: false, error: 'Artwork not found' });
+      if (!target) return res.status(404).json({ success: false, error: 'Artwork not found.' });
 
-      // Delete all associated blobs before removing from Redis.
-      // Handle both new images[] shape and legacy imgUrl.
+      // Delete all associated blobs — handle both new images[] and legacy imgUrl
       const blobsToDelete = Array.isArray(target.images) && target.images.length > 0
         ? target.images
         : (target.imgUrl ? [target.imgUrl] : []);
@@ -322,15 +231,15 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true });
     }
 
-    // ── PATCH — toggle sold ─────────────────────────────────────────────
+    // ── PATCH — toggle sold status ──────────────────────────────────────
     case 'PATCH': {
       const { id } = req.body || {};
-      if (!id) return res.status(400).json({ success: false, error: 'Missing id' });
+      if (!id) return res.status(400).json({ success: false, error: 'Missing id.' });
 
       let artworks = (await redis.get('artworks')) || [];
       const numId  = Number(id);
       const idx    = artworks.findIndex(a => Number(a.id) === numId);
-      if (idx === -1) return res.status(404).json({ success: false, error: 'Artwork not found' });
+      if (idx === -1) return res.status(404).json({ success: false, error: 'Artwork not found.' });
 
       artworks[idx].sold = !artworks[idx].sold;
       const newSold = artworks[idx].sold;

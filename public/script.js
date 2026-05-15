@@ -1,7 +1,6 @@
 'use strict';
 
 /* ─── SESSION ─────────────────────────────────────────────────────────────── */
-// Admin JWT is stored only in sessionStorage — cleared when the tab closes.
 const SESSION_KEY = 'atelier_admin_token';
 
 function getToken()   { try { return sessionStorage.getItem(SESSION_KEY); } catch { return null; } }
@@ -14,16 +13,16 @@ let artworks        = [];
 let cart            = [];
 let isAdmin         = false;
 let pendingDeleteId = null;
-let newImgDataArray = [];   // array of base64 data URIs staged for upload
+let newImgDataArray = [];   // base64 data URIs staged for upload
 let squareCard      = null;
 let squarePayments  = null;
 let selectedPostage = null;
 let artistPhoto     = null;
 
 // Lightbox state
-let lightboxImages  = [];   // array of image URLs currently shown in lightbox
-let lightboxIndex   = 0;    // which image is currently displayed
-let lightboxTitle   = '';   // painting title shown in lightbox footer
+let lightboxImages = [];
+let lightboxIndex  = 0;
+let lightboxTitle  = '';
 
 /* ─── API HELPERS ─────────────────────────────────────────────────────────── */
 async function apiFetch(path, options = {}) {
@@ -43,7 +42,7 @@ async function apiFetch(path, options = {}) {
       errMsg = err.error || err.message || errMsg;
     } catch {
       if (res.status === 413) {
-        errMsg = 'The file is too large. Please resize the image to under 2MB and try again.';
+        errMsg = 'This image is too large (over 4MB). Please resize it and try again.';
       }
     }
     throw Object.assign(new Error(errMsg), { status: res.status });
@@ -51,7 +50,7 @@ async function apiFetch(path, options = {}) {
   return res.json();
 }
 
-/* ─── GALLERY — load from API ─────────────────────────────────────────────── */
+/* ─── GALLERY ─────────────────────────────────────────────────────────────── */
 async function loadArtworks() {
   try {
     const data  = await apiFetch('/api/get-artworks');
@@ -67,8 +66,8 @@ async function loadArtworks() {
 
 /* ─── ARTIST PHOTO ────────────────────────────────────────────────────────── */
 function renderArtistPhoto() {
-  const wrap  = el('about-photo');
-  const label = el('about-photo-label');
+  const wrap     = el('about-photo');
+  const label    = el('about-photo-label');
   const existing = wrap.querySelector('img');
   if (existing) existing.remove();
 
@@ -86,13 +85,11 @@ function renderArtistPhoto() {
 async function handleArtistPhotoUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
-
   const btn = el('artist-photo-upload-btn');
   btn.textContent = 'Uploading…';
   btn.disabled    = true;
-
-  const reader = new FileReader();
-  reader.onload = async ev => {
+  const reader    = new FileReader();
+  reader.onload   = async ev => {
     try {
       const data  = await apiFetch('/api/update-artist-photo', {
         method: 'POST',
@@ -125,17 +122,11 @@ async function removeArtistPhoto() {
 }
 
 /* ─── GALLERY CARDS ───────────────────────────────────────────────────────── */
-
-/** Builds a single artwork card element. */
 function buildCard(art) {
   const card = document.createElement('div');
   card.className = 'artwork-card';
   card.id = 'card-' + art.id;
 
-  // ── Image area ───────────────────────────────────────────────────────────
-  // art.images is always a string[] after get-artworks.js normalisation.
-  // First image is the hero shown in the card grid.
-  // Clicking the image opens the lightbox (all images for this painting).
   const imgWrap = document.createElement('div');
   imgWrap.className = 'artwork-img';
 
@@ -150,12 +141,10 @@ function buildCard(art) {
     imgWrap.innerHTML = art.svg;
   }
 
-  // Click on image area opens lightbox (only if there are real images)
   if (heroUrl) {
     imgWrap.addEventListener('click', () => openLightbox(art));
   }
 
-  // Show image count badge for paintings with more than one photo
   if (art.images && art.images.length > 1) {
     const badge = document.createElement('span');
     badge.className   = 'artwork-img-count';
@@ -163,15 +152,13 @@ function buildCard(art) {
     imgWrap.appendChild(badge);
   }
 
-  // Sold overlay sits on top of everything in imgWrap
   if (art.sold) {
     const overlay = document.createElement('div');
-    overlay.className = 'sold-overlay';
+    overlay.className   = 'sold-overlay';
     overlay.textContent = 'Sold';
     imgWrap.appendChild(overlay);
   }
 
-  // ── Label row ────────────────────────────────────────────────────────────
   const labelRow = document.createElement('div'); labelRow.className = 'artwork-label';
   const titleEl  = document.createElement('span'); titleEl.className  = 'artwork-title'; titleEl.textContent = art.title;
   const priceEl  = document.createElement('span'); priceEl.className  = 'artwork-price'; priceEl.textContent = 'AUD $' + art.price.toLocaleString();
@@ -179,14 +166,12 @@ function buildCard(art) {
 
   const mediumEl = document.createElement('div'); mediumEl.className = 'artwork-medium'; mediumEl.textContent = art.medium;
 
-  // ── Add to cart button ───────────────────────────────────────────────────
   const addBtn = document.createElement('button');
   addBtn.className   = 'add-btn' + (inCart(art.id) ? ' added' : '');
   addBtn.disabled    = art.sold || inCart(art.id);
   addBtn.textContent = art.sold ? 'Sold' : inCart(art.id) ? 'In your selection' : '+ Add to selection';
   addBtn.addEventListener('click', () => addToCart(art.id));
 
-  // ── Admin controls ───────────────────────────────────────────────────────
   const adminCtrl = document.createElement('div');
   adminCtrl.className = 'admin-controls' + (isAdmin ? ' visible' : '');
 
@@ -208,7 +193,6 @@ function buildCard(art) {
   return card;
 }
 
-/** Populates a grid element with cards, or shows an empty message. */
 function populateGrid(gridEl, items) {
   gridEl.innerHTML = '';
   if (items.length === 0) {
@@ -233,12 +217,6 @@ function renderGallery() {
 function inCart(id) { return cart.some(i => i.id === id); }
 
 /* ─── LIGHTBOX ────────────────────────────────────────────────────────────── */
-
-/**
- * Opens the lightbox for a given artwork, starting at the given image index.
- * @param {object} art        The artwork object (must have art.images[])
- * @param {number} [startIdx] Which image to open first (default 0)
- */
 function openLightbox(art, startIdx = 0) {
   if (!art.images || art.images.length === 0) return;
 
@@ -246,7 +224,6 @@ function openLightbox(art, startIdx = 0) {
   lightboxIndex  = startIdx;
   lightboxTitle  = art.title;
 
-  // Build dot indicators (one per image)
   const dotsEl = el('lightbox-dots');
   dotsEl.innerHTML = '';
   art.images.forEach((_, i) => {
@@ -257,15 +234,11 @@ function openLightbox(art, startIdx = 0) {
     dotsEl.appendChild(dot);
   });
 
-  // Show/hide nav arrows depending on image count
   const hasMult = art.images.length > 1;
   el('lightbox-prev').classList.toggle('hidden', !hasMult);
   el('lightbox-next').classList.toggle('hidden', !hasMult);
 
-  // Set title in footer
   el('lightbox-title').textContent = art.title;
-
-  // Render first image without fade transition on open
   el('lightbox-img').src = art.images[startIdx];
   el('lightbox-img').alt = art.title;
   updateLightboxCounter();
@@ -278,54 +251,35 @@ function openLightbox(art, startIdx = 0) {
 function closeLightbox() {
   el('lightbox-overlay').classList.remove('open');
   document.body.style.overflow = '';
-  // Clear src after transition so previous image doesn't flash on reopen
-  setTimeout(() => {
-    el('lightbox-img').src = '';
-    lightboxImages = [];
-  }, 250);
+  setTimeout(() => { el('lightbox-img').src = ''; lightboxImages = []; }, 250);
 }
 
-/**
- * Switches to a specific image index with a brief fade transition.
- * Updates the counter, dots, and arrow disabled states.
- */
 function showLightboxImage(idx) {
   if (idx < 0 || idx >= lightboxImages.length) return;
   lightboxIndex = idx;
-
   const imgEl = el('lightbox-img');
-
-  // Fade out → swap src → fade in
   imgEl.classList.add('fading');
   setTimeout(() => {
     imgEl.src = lightboxImages[idx];
     imgEl.alt = lightboxTitle + ' — image ' + (idx + 1);
     imgEl.classList.remove('fading');
   }, 180);
-
   updateLightboxCounter();
   updateLightboxDots();
   updateLightboxNavButtons();
 }
 
-function lightboxNext() {
-  if (lightboxIndex < lightboxImages.length - 1) showLightboxImage(lightboxIndex + 1);
-}
-
-function lightboxPrev() {
-  if (lightboxIndex > 0) showLightboxImage(lightboxIndex - 1);
-}
+function lightboxNext() { if (lightboxIndex < lightboxImages.length - 1) showLightboxImage(lightboxIndex + 1); }
+function lightboxPrev() { if (lightboxIndex > 0) showLightboxImage(lightboxIndex - 1); }
 
 function updateLightboxCounter() {
   const total = lightboxImages.length;
   el('lightbox-counter').textContent = total > 1 ? (lightboxIndex + 1) + ' of ' + total : '';
 }
-
 function updateLightboxDots() {
-  const dots = el('lightbox-dots').querySelectorAll('.lightbox-dot');
-  dots.forEach((dot, i) => dot.classList.toggle('active', i === lightboxIndex));
+  el('lightbox-dots').querySelectorAll('.lightbox-dot')
+    .forEach((dot, i) => dot.classList.toggle('active', i === lightboxIndex));
 }
-
 function updateLightboxNavButtons() {
   el('lightbox-prev').disabled = lightboxIndex === 0;
   el('lightbox-next').disabled = lightboxIndex === lightboxImages.length - 1;
@@ -347,17 +301,10 @@ function closeLogin() {
 async function attemptLogin() {
   const pw    = el('admin-pw').value;
   const btnEl = el('login-btn');
-
   if (!pw) { el('login-error').textContent = 'Please enter your password.'; return; }
-
-  btnEl.disabled    = true;
-  btnEl.textContent = 'Signing in…';
-
+  btnEl.disabled = true; btnEl.textContent = 'Signing in…';
   try {
-    const data = await apiFetch('/api/login', {
-      method: 'POST',
-      body:   JSON.stringify({ password: pw }),
-    });
+    const data = await apiFetch('/api/login', { method: 'POST', body: JSON.stringify({ password: pw }) });
     setToken(data.token);
     isAdmin = true;
     closeLogin();
@@ -372,17 +319,14 @@ async function attemptLogin() {
     el('admin-pw').value = '';
     setTimeout(() => el('admin-pw').focus(), 50);
   } finally {
-    btnEl.disabled    = false;
-    btnEl.textContent = 'Sign in';
+    btnEl.disabled = false; btnEl.textContent = 'Sign in';
   }
 }
 
 async function adminLogout() {
   try {
     await apiFetch('/api/logout', { method: 'POST', body: JSON.stringify({}) });
-  } catch (e) {
-    console.error('Server logout failed:', e);
-  }
+  } catch (e) { console.error('Server logout failed:', e); }
   clearToken();
   isAdmin = false;
   el('admin-bar').classList.remove('visible');
@@ -405,13 +349,8 @@ function activateAdminMode() {
 async function toggleSold(id) {
   try {
     await apiFetch('/api/paintings', { method: 'PATCH', body: JSON.stringify({ id }) });
-    await loadArtworks();
-    renderGallery();
-    updateCartUI();
-  } catch (e) {
-    console.error('toggleSold failed:', e);
-    alert('Could not update status. Please try again.');
-  }
+    await loadArtworks(); renderGallery(); updateCartUI();
+  } catch (e) { console.error('toggleSold failed:', e); alert('Could not update status. Please try again.'); }
 }
 
 function confirmDelete(id, title) {
@@ -426,26 +365,14 @@ async function executeDeletion() {
   const id = pendingDeleteId;
   pendingDeleteId = null;
   el('confirm-overlay').classList.remove('open');
-
   try {
     await apiFetch('/api/paintings', { method: 'DELETE', body: JSON.stringify({ id }) });
     cart = cart.filter(i => i.id !== id);
-    await loadArtworks();
-    renderGallery();
-    updateCartUI();
-  } catch (e) {
-    console.error('delete failed:', e);
-    alert('Could not delete painting. Please try again.');
-  }
+    await loadArtworks(); renderGallery(); updateCartUI();
+  } catch (e) { console.error('delete failed:', e); alert('Could not delete painting. Please try again.'); }
 }
 
-/* ─── ADD PAINTING — multi-image upload ───────────────────────────────────── */
-
-/**
- * Renders the image strip in the add panel from the current newImgDataArray.
- * Each tile shows a thumbnail and a × remove button.
- * The "+ Add photos" button is hidden when 10 images are staged.
- */
+/* ─── ADD PAINTING ────────────────────────────────────────────────────────── */
 function renderImgStrip() {
   const strip   = el('img-strip');
   const addWrap = el('img-strip-add');
@@ -456,42 +383,33 @@ function renderImgStrip() {
     tile.className = 'img-strip-thumb';
 
     const img = document.createElement('img');
-    img.src = dataUri;
-    img.alt = 'Image ' + (i + 1);
+    img.src = dataUri; img.alt = 'Image ' + (i + 1);
     tile.appendChild(img);
 
     const removeBtn = document.createElement('button');
     removeBtn.className   = 'img-strip-remove';
     removeBtn.textContent = '×';
     removeBtn.setAttribute('aria-label', 'Remove image ' + (i + 1));
-    removeBtn.addEventListener('click', () => {
-      newImgDataArray.splice(i, 1);
-      renderImgStrip();
-    });
+    removeBtn.addEventListener('click', () => { newImgDataArray.splice(i, 1); renderImgStrip(); });
     tile.appendChild(removeBtn);
 
     strip.appendChild(tile);
   });
 
-  // Hide the add button once the 10-image limit is reached
   addWrap.style.display = newImgDataArray.length >= 10 ? 'none' : '';
 }
 
 function openAddPanel() {
   el('add-panel').classList.add('open');
   document.body.style.overflow = 'hidden';
-
-  // Reset all fields
   ['new-title', 'new-medium', 'new-price',
    'new-weight', 'new-length', 'new-width', 'new-height'].forEach(id => el(id).value = '');
   el('new-category').value    = 'seascape';
   el('new-sold').checked      = false;
   el('add-error').textContent = '';
-
-  // Reset image state
   newImgDataArray = [];
   renderImgStrip();
-  el('img-file').value = ''; // clear so same files can be re-selected
+  el('img-file').value = '';
 }
 
 function closeAddPanel() {
@@ -499,29 +417,22 @@ function closeAddPanel() {
   document.body.style.overflow = '';
 }
 
-/**
- * Handles the file input change event for the multi-image upload.
- * Reads each selected file as a base64 data URI and appends to newImgDataArray.
- * Enforces the 10-image cap — excess files are silently dropped with a message.
- */
 function handleImgUpload(e) {
-  const files = Array.from(e.target.files);
+  const files     = Array.from(e.target.files);
   if (!files.length) return;
-
   const remaining = 10 - newImgDataArray.length;
   const toLoad    = files.slice(0, remaining);
 
   if (files.length > remaining) {
     el('add-error').textContent =
-      'Maximum 10 images per painting. ' +
-      (files.length - remaining) + ' file(s) were not added.';
+      'Maximum 10 images per painting — ' + (files.length - remaining) + ' file(s) were not added.';
   } else {
     el('add-error').textContent = '';
   }
 
   let loaded = 0;
   toLoad.forEach(file => {
-    const reader = new FileReader();
+    const reader  = new FileReader();
     reader.onload = ev => {
       newImgDataArray.push(ev.target.result);
       loaded++;
@@ -529,11 +440,22 @@ function handleImgUpload(e) {
     };
     reader.readAsDataURL(file);
   });
-
-  // Reset so the same file(s) can be selected again if needed
   e.target.value = '';
 }
 
+/**
+ * saveNewPainting — two-phase upload
+ *
+ * Phase 1: POST /api/paintings with metadata only → receives artwork ID.
+ * Phase 2: For each staged image, POST /api/upload-image with that ID.
+ *          Each request carries exactly one image (≤4MB decoded), so
+ *          Vercel's hard request body limit is never a constraint.
+ *
+ * Progress is shown per-image ("Uploading image 2 of 4…").
+ * If an individual image fails the error is shown and the rest are skipped,
+ * but the painting record is already saved — Michael can re-open and add
+ * the remaining images later (once that workflow is built).
+ */
 async function saveNewPainting() {
   const title    = el('new-title').value.trim();
   const medium   = el('new-medium').value.trim();
@@ -545,7 +467,9 @@ async function saveNewPainting() {
   const width    = parseFloat(el('new-width').value);
   const height   = parseFloat(el('new-height').value);
   const errEl    = el('add-error');
+  const btn      = el('save-painting-btn');
 
+  // ── Client-side validation ──────────────────────────────────────────
   if (!title)  { errEl.textContent = 'Please enter a title.'; return; }
   if (!medium) { errEl.textContent = 'Please enter the medium and dimensions.'; return; }
   const price = parseInt(priceRaw, 10);
@@ -556,32 +480,68 @@ async function saveNewPainting() {
   if (isNaN(height) || height <= 0) { errEl.textContent = 'Please enter the packed height in cm.'; return; }
 
   errEl.textContent = '';
-  const btn = el('save-painting-btn');
   btn.disabled    = true;
-  btn.textContent = newImgDataArray.length > 0
-    ? 'Uploading ' + newImgDataArray.length + ' image' + (newImgDataArray.length > 1 ? 's' : '') + '…'
-    : 'Saving…';
+  btn.textContent = 'Saving…';
 
+  // ── Phase 1: create the artwork record (metadata only) ──────────────
+  let newId;
   try {
     const data = await apiFetch('/api/paintings', {
       method: 'POST',
-      body:   JSON.stringify({
-        title, medium, price, category, sold,
-        weight, length, width, height,
-        imgDataArray: newImgDataArray,   // full array (may be empty)
-      }),
+      body:   JSON.stringify({ title, medium, price, category, sold, weight, length, width, height }),
     });
-    await loadArtworks();
-    renderGallery();
-    closeAddPanel();
-    setTimeout(() => {
-      const card = document.getElementById('card-' + data.id);
-      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 200);
+    newId = data.id;
   } catch (e) {
     errEl.textContent = e.message || 'Failed to save painting. Please try again.';
-    console.error(e);
-  } finally {
+    btn.disabled = false; btn.textContent = 'Save painting to gallery';
+    return;
+  }
+
+  // ── Phase 2: upload each image sequentially ─────────────────────────
+  // One request per image. Each is individually validated and size-checked
+  // server-side, so a 4MB-per-image limit applies cleanly with no
+  // total-payload problem.
+  const total        = newImgDataArray.length;
+  const failedImages = [];
+
+  for (let i = 0; i < total; i++) {
+    btn.textContent = `Uploading image ${i + 1} of ${total}…`;
+    try {
+      await apiFetch('/api/upload-image', {
+        method: 'POST',
+        body:   JSON.stringify({
+          artworkId: newId,
+          imgData:   newImgDataArray[i],
+          index:     i,
+        }),
+      });
+    } catch (e) {
+      // Record which image failed but continue with the rest
+      failedImages.push({ index: i + 1, reason: e.message || 'Unknown error' });
+      console.error(`Image ${i + 1} upload failed:`, e);
+    }
+  }
+
+  // ── Reload gallery ──────────────────────────────────────────────────
+  await loadArtworks();
+  renderGallery();
+
+  // ── Report outcome ──────────────────────────────────────────────────
+  if (failedImages.length === 0) {
+    // All good — close panel and scroll to the new card
+    closeAddPanel();
+    setTimeout(() => {
+      const card = document.getElementById('card-' + newId);
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 200);
+  } else {
+    // Painting was saved but some images failed — stay open and report
+    const failList = failedImages
+      .map(f => `Image ${f.index}: ${f.reason}`)
+      .join('\n');
+    errEl.textContent =
+      `Painting saved, but ${failedImages.length} image(s) failed to upload:\n${failList}\n` +
+      'The painting has been added to your gallery. You can delete and re-add it to retry the images.';
     btn.disabled    = false;
     btn.textContent = 'Save painting to gallery';
   }
@@ -591,8 +551,7 @@ async function saveNewPainting() {
 function addToCart(id) {
   const art = artworks.find(a => a.id === id);
   if (!art || art.sold || inCart(id)) return;
-  cart.push(art);
-  updateCartUI(); renderGallery(); openCart();
+  cart.push(art); updateCartUI(); renderGallery(); openCart();
 }
 function removeFromCart(id) {
   cart = cart.filter(i => i.id !== id);
@@ -624,11 +583,9 @@ function updateCartUI() {
     const item  = document.createElement('div'); item.className = 'cart-item';
     const thumb = document.createElement('div'); thumb.className = 'cart-item-thumb';
 
-    // Use first image from images[] for the cart thumbnail
     const heroUrl = art.images && art.images.length > 0 ? art.images[0] : null;
     if (heroUrl) {
-      const img = document.createElement('img');
-      img.src = heroUrl; img.alt = art.title;
+      const img = document.createElement('img'); img.src = heroUrl; img.alt = art.title;
       thumb.appendChild(img);
     } else if (art.svg) {
       thumb.innerHTML = art.svg;
@@ -675,12 +632,11 @@ function buildOrderSummary() {
   summaryEl.innerHTML = '';
 
   cart.forEach(a => {
-    const row      = document.createElement('div'); row.className = 'order-line';
+    const row = document.createElement('div'); row.className = 'order-line';
     const nameSpan = document.createElement('span');
-    const em       = document.createElement('em'); em.textContent = a.title;
+    const em = document.createElement('em'); em.textContent = a.title;
     nameSpan.appendChild(em);
-    const priceSpan = document.createElement('span');
-    priceSpan.textContent = 'AUD $' + a.price.toLocaleString();
+    const priceSpan = document.createElement('span'); priceSpan.textContent = 'AUD $' + a.price.toLocaleString();
     row.appendChild(nameSpan); row.appendChild(priceSpan);
     summaryEl.appendChild(row);
   });
@@ -706,16 +662,16 @@ async function openCheckout() {
   document.body.style.overflow = 'hidden';
   buildOrderSummary();
   el('checkout-modal').classList.add('open');
-  el('checkout-body').style.display = 'block';
-  el('success-state').style.display = 'none';
+  el('checkout-body').style.display  = 'block';
+  el('success-state').style.display  = 'none';
   if (!squareCard) await initSquare();
 }
 function closeCheckout() {
   el('checkout-modal').classList.remove('open');
   el('postage-result').innerHTML = '';
-  el('buyer-postcode').value = '';
+  el('buyer-postcode').value     = '';
   selectedPostage = null;
-  document.body.style.overflow = '';
+  document.body.style.overflow  = '';
 }
 
 /* ─── ORDERS PANEL ────────────────────────────────────────────────────────── */
@@ -732,65 +688,42 @@ function closeOrders() {
 async function renderOrders() {
   const body = el('orders-panel-body');
   body.innerHTML = '<div class="orders-loading">Loading orders…</div>';
-
   try {
     const data   = await apiFetch('/api/get-orders');
     const orders = data.orders || [];
-
-    if (orders.length === 0) {
-      body.innerHTML = '<div class="orders-empty">No orders yet.</div>';
-      return;
-    }
+    if (orders.length === 0) { body.innerHTML = '<div class="orders-empty">No orders yet.</div>'; return; }
 
     const frag = document.createDocumentFragment();
-
     orders.forEach(order => {
-      const card = document.createElement('div');
-      card.className = 'order-card';
-
-      const head = document.createElement('div');
-      head.className = 'order-card-head';
-      const idEl = document.createElement('span');
-      idEl.className   = 'order-card-id';
-      idEl.textContent = 'Order ' + order.orderId;
-      const dateEl = document.createElement('span');
-      dateEl.className   = 'order-card-date';
+      const card = document.createElement('div'); card.className = 'order-card';
+      const head = document.createElement('div'); head.className = 'order-card-head';
+      const idEl = document.createElement('span'); idEl.className = 'order-card-id'; idEl.textContent = 'Order ' + order.orderId;
+      const dateEl = document.createElement('span'); dateEl.className = 'order-card-date';
       dateEl.textContent = order.ts
-        ? new Date(order.ts).toLocaleString('en-AU', {
-            day: 'numeric', month: 'short', year: 'numeric',
-            hour: '2-digit', minute: '2-digit',
-          })
+        ? new Date(order.ts).toLocaleString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
         : '—';
-      head.appendChild(idEl);
-      head.appendChild(dateEl);
+      head.appendChild(idEl); head.appendChild(dateEl);
 
-      const cardBody = document.createElement('div');
-      cardBody.className = 'order-card-body';
+      const cardBody = document.createElement('div'); cardBody.className = 'order-card-body';
 
-      const worksLabel = document.createElement('div');
-      worksLabel.className   = 'order-section-label';
-      worksLabel.textContent = 'Works Sold';
+      const worksLabel = document.createElement('div'); worksLabel.className = 'order-section-label'; worksLabel.textContent = 'Works Sold';
       cardBody.appendChild(worksLabel);
-
       (order.items || []).forEach(item => {
         const row = document.createElement('div'); row.className = 'order-item-row';
-        const title = document.createElement('span'); title.className = 'order-item-title'; title.textContent = item.title;
-        const price = document.createElement('span'); price.className = 'order-item-price'; price.textContent = 'AUD $' + Number(item.price).toLocaleString();
-        row.appendChild(title); row.appendChild(price);
-        cardBody.appendChild(row);
+        const t = document.createElement('span'); t.className = 'order-item-title'; t.textContent = item.title;
+        const p = document.createElement('span'); p.className = 'order-item-price'; p.textContent = 'AUD $' + Number(item.price).toLocaleString();
+        row.appendChild(t); row.appendChild(p); cardBody.appendChild(row);
       });
 
       const postageRow = document.createElement('div'); postageRow.className = 'order-postage-row';
-      const postageLabel = document.createElement('span'); postageLabel.textContent = order.postageName || 'Postage';
-      const postagePrice = document.createElement('span'); postagePrice.textContent = 'AUD $' + Number(order.postagePrice).toFixed(2);
-      postageRow.appendChild(postageLabel); postageRow.appendChild(postagePrice);
-      cardBody.appendChild(postageRow);
+      const pl = document.createElement('span'); pl.textContent = order.postageName || 'Postage';
+      const pp = document.createElement('span'); pp.textContent = 'AUD $' + Number(order.postagePrice).toFixed(2);
+      postageRow.appendChild(pl); postageRow.appendChild(pp); cardBody.appendChild(postageRow);
 
       const totalRow = document.createElement('div'); totalRow.className = 'order-total-row';
-      const totalLabel = document.createElement('span'); totalLabel.className = 'order-total-label'; totalLabel.textContent = 'Total Charged';
-      const totalAmount = document.createElement('span'); totalAmount.className = 'order-total-amount'; totalAmount.textContent = 'AUD $' + Number(order.grandTotal).toFixed(2);
-      totalRow.appendChild(totalLabel); totalRow.appendChild(totalAmount);
-      cardBody.appendChild(totalRow);
+      const tl = document.createElement('span'); tl.className = 'order-total-label'; tl.textContent = 'Total Charged';
+      const ta = document.createElement('span'); ta.className = 'order-total-amount'; ta.textContent = 'AUD $' + Number(order.grandTotal).toFixed(2);
+      totalRow.appendChild(tl); totalRow.appendChild(ta); cardBody.appendChild(totalRow);
 
       const custLabel = document.createElement('div'); custLabel.className = 'order-section-label'; custLabel.textContent = 'Customer';
       cardBody.appendChild(custLabel);
@@ -799,8 +732,7 @@ async function renderOrders() {
       [['Name', (c.firstName || '') + ' ' + (c.lastName || '')], ['Email', c.email || '—'], ['Phone', c.phone || '—']].forEach(([key, val]) => {
         const k = document.createElement('span'); k.className = 'order-detail-key'; k.textContent = key;
         const v = document.createElement('span'); v.className = 'order-detail-val';
-        if (key === 'Email' && c.email) { const a = document.createElement('a'); a.href = 'mailto:' + c.email; a.textContent = c.email; v.appendChild(a); }
-        else v.textContent = val;
+        if (key === 'Email' && c.email) { const a = document.createElement('a'); a.href = 'mailto:' + c.email; a.textContent = c.email; v.appendChild(a); } else v.textContent = val;
         custGrid.appendChild(k); custGrid.appendChild(v);
       });
       cardBody.appendChild(custGrid);
@@ -816,14 +748,11 @@ async function renderOrders() {
       });
       cardBody.appendChild(shipGrid);
 
-      card.appendChild(head);
-      card.appendChild(cardBody);
-      frag.appendChild(card);
+      card.appendChild(head); card.appendChild(cardBody); frag.appendChild(card);
     });
 
     el('orders-panel-body').innerHTML = '';
     el('orders-panel-body').appendChild(frag);
-
   } catch (e) {
     el('orders-panel-body').innerHTML = '<div class="orders-empty">Could not load orders. Please try again.</div>';
     console.error('renderOrders error:', e);
@@ -837,20 +766,16 @@ async function calculatePostage() {
   const btn      = el('postage-calc-btn');
 
   if (!postcode || !/^[0-9]{4}$/.test(postcode)) {
-    resultEl.innerHTML = '<p class="postage-error">Please enter a valid 4-digit postcode.</p>';
-    return;
+    resultEl.innerHTML = '<p class="postage-error">Please enter a valid 4-digit postcode.</p>'; return;
   }
 
   const itemsWithShipping = cart.filter(a => a.shipping?.weight > 0);
   if (itemsWithShipping.length === 0) {
     resultEl.innerHTML = '<p class="postage-error">Shipping details are not yet available for this item. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a quote.</p>';
-    btn.disabled = false; btn.textContent = 'Calculate';
     return;
   }
 
-  const heaviest = itemsWithShipping.reduce((max, art) =>
-    art.shipping.weight > max.shipping.weight ? art : max
-  , itemsWithShipping[0]);
+  const heaviest = itemsWithShipping.reduce((max, art) => art.shipping.weight > max.shipping.weight ? art : max, itemsWithShipping[0]);
   const shipping = heaviest.shipping;
 
   btn.disabled = true; btn.textContent = 'Calculating…';
@@ -864,25 +789,15 @@ async function calculatePostage() {
 
     if (data.services && data.services.length > 0) {
       selectedPostage = null;
-      const servicesWrap = document.createElement('div');
-      servicesWrap.className = 'postage-services';
-      const note = document.createElement('p');
-      note.className = 'postage-note';
+      const servicesWrap = document.createElement('div'); servicesWrap.className = 'postage-services';
+      const note = document.createElement('p'); note.className = 'postage-note';
       note.textContent = `Postage from Airlie Beach (4802) to ${postcode}${cart.length > 1 ? ' — quoted for largest item' : ''}. Select a service:`;
       servicesWrap.appendChild(note);
 
       data.services.forEach((s, i) => {
-        const label = document.createElement('label');
-        label.className = 'postage-service postage-service-selectable';
-        label.htmlFor   = 'postage-option-' + i;
-        const radio = document.createElement('input');
-        radio.type = 'radio'; radio.name = 'postage-option'; radio.id = 'postage-option-' + i;
-        radio.value = i; radio.className = 'postage-radio';
-        radio.addEventListener('change', () => {
-          selectedPostage = { name: s.name, price: s.price, quoteId: s.quoteId };
-          updateOrderSummary();
-          el('payment-error').style.display = 'none';
-        });
+        const label = document.createElement('label'); label.className = 'postage-service postage-service-selectable'; label.htmlFor = 'postage-option-' + i;
+        const radio = document.createElement('input'); radio.type = 'radio'; radio.name = 'postage-option'; radio.id = 'postage-option-' + i; radio.value = i; radio.className = 'postage-radio';
+        radio.addEventListener('change', () => { selectedPostage = { name: s.name, price: s.price, quoteId: s.quoteId }; updateOrderSummary(); el('payment-error').style.display = 'none'; });
         const nameSpan = document.createElement('span'); nameSpan.className = 'postage-service-name'; nameSpan.textContent = s.name;
         const detailsSpan = document.createElement('span'); detailsSpan.className = 'postage-service-details';
         if (s.deliveryTime) { const d = document.createElement('span'); d.className = 'postage-delivery'; d.textContent = s.deliveryTime; detailsSpan.appendChild(d); }
@@ -892,12 +807,10 @@ async function calculatePostage() {
         servicesWrap.appendChild(label);
       });
 
-      const disclaimer = document.createElement('p');
-      disclaimer.className = 'postage-disclaimer';
+      const disclaimer = document.createElement('p'); disclaimer.className = 'postage-disclaimer';
       disclaimer.textContent = 'Selected postage will be added to your total. Michael will confirm and dispatch once payment is received.';
       servicesWrap.appendChild(disclaimer);
-      resultEl.innerHTML = '';
-      resultEl.appendChild(servicesWrap);
+      resultEl.innerHTML = ''; resultEl.appendChild(servicesWrap);
     } else {
       selectedPostage = null;
       resultEl.innerHTML = `<p class="postage-error">${data.message || 'No postage options found. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a quote.'}</p>`;
@@ -914,25 +827,17 @@ async function submitContactForm() {
   const errEl  = el('contact-form-error');
   const succEl = el('contact-form-success');
   const btn    = el('contact-form-btn');
-
   try {
     const name    = el('contact-name').value.trim();
     const email   = el('contact-email').value.trim();
     const message = el('contact-message').value.trim();
     errEl.textContent = ''; succEl.textContent = '';
-
     if (!name)    { errEl.textContent = 'Please enter your name.'; return; }
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { errEl.textContent = 'Please enter a valid email address.'; return; }
     if (!message) { errEl.textContent = 'Please enter a message.'; return; }
-
     btn.disabled = true; btn.textContent = 'Sending…';
-
     const data = await apiFetch('/api/contact', { method: 'POST', body: JSON.stringify({ name, email, message }) });
-
-    if (data.fallback) {
-      errEl.innerHTML = data.error + ' — <a href="mailto:michael.p.vanblerk@gmail.com" style="color:#f5a0a0;">michael.p.vanblerk@gmail.com</a>';
-      return;
-    }
+    if (data.fallback) { errEl.innerHTML = data.error + ' — <a href="mailto:michael.p.vanblerk@gmail.com" style="color:#f5a0a0;">michael.p.vanblerk@gmail.com</a>'; return; }
     succEl.textContent = 'Message sent — Michael will be in touch soon.';
     el('contact-name').value = ''; el('contact-email').value = ''; el('contact-message').value = '';
   } catch (e) {
@@ -957,11 +862,10 @@ async function initSquare() {
 }
 
 function showPaymentError(msg) {
-  const errEl = el('payment-error');
-  errEl.textContent = msg; errEl.style.display = 'block';
+  const errEl = el('payment-error'); errEl.textContent = msg; errEl.style.display = 'block';
 }
 
-/* ─── FORM FIELD HELPERS ──────────────────────────────────────────────────── */
+/* ─── FORM HELPERS ────────────────────────────────────────────────────────── */
 function fieldVal(id)       { return el(id).value.trim(); }
 function hasHtml(str)       { return /[<>]/.test(str); }
 function validPhone(str)    { return /^[0-9+\s\-]{6,20}$/.test(str); }
@@ -996,12 +900,10 @@ function validateForm() {
 
 async function handlePayment() {
   el('payment-error').style.display = 'none';
-  const fields = validateForm();
-  if (!fields) return;
+  const fields = validateForm(); if (!fields) return;
   if (!selectedPostage) { showPaymentError('Please calculate postage and select a shipping option before completing your purchase.'); return; }
   if (!squareCard) { showPaymentError('Payment form is not ready. Please try again.'); return; }
-  const btn = el('pay-btn');
-  btn.disabled = true; btn.textContent = 'Processing…';
+  const btn = el('pay-btn'); btn.disabled = true; btn.textContent = 'Processing…';
   try {
     const result = await squareCard.tokenize();
     if (result.status === 'OK') {
@@ -1082,8 +984,7 @@ function showSuccess(orderId) {
 function resetShop() {
   squareCard = null; squarePayments = null;
   el('card-container').innerHTML = '';
-  renderGallery();
-  closeCheckout();
+  renderGallery(); closeCheckout();
 }
 
 /* ─── HELPER ──────────────────────────────────────────────────────────────── */
@@ -1092,74 +993,55 @@ function el(id) { return document.getElementById(id); }
 /* ─── BOOT ────────────────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', async () => {
 
-  // Nav
   el('cart-toggle-btn').addEventListener('click', toggleCart);
   el('admin-nav-link').addEventListener('click', e => { e.preventDefault(); openLogin(); });
 
-  // Cart panel
   el('cart-overlay').addEventListener('click', closeCart);
   el('cart-close-btn').addEventListener('click', closeCart);
   el('checkout-btn').addEventListener('click', openCheckout);
 
-  // Checkout modal
   el('checkout-close-btn').addEventListener('click', closeCheckout);
   el('pay-btn').addEventListener('click', handlePayment);
   el('postage-calc-btn').addEventListener('click', calculatePostage);
   el('buyer-postcode').addEventListener('keydown', e => { if (e.key === 'Enter') calculatePostage(); });
 
-  // Success
   el('success-continue-btn').addEventListener('click', resetShop);
 
-  // Login
   el('login-btn').addEventListener('click', attemptLogin);
   el('login-cancel-btn').addEventListener('click', closeLogin);
   el('admin-pw').addEventListener('keydown', e => { if (e.key === 'Enter') attemptLogin(); });
   el('pw-toggle-btn').addEventListener('click', () => {
-    const input = el('admin-pw');
-    const btn   = el('pw-toggle-btn');
+    const input = el('admin-pw'); const btn = el('pw-toggle-btn');
     const show  = input.type === 'password';
-    input.type      = show ? 'text' : 'password';
+    input.type = show ? 'text' : 'password';
     btn.textContent = show ? 'Hide' : 'Show';
     btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
   });
 
-  // Admin bar
   el('admin-orders-btn').addEventListener('click', openOrders);
   el('admin-add-btn').addEventListener('click', openAddPanel);
   el('admin-logout-btn').addEventListener('click', adminLogout);
 
-  // Orders panel
   el('orders-close-btn').addEventListener('click', closeOrders);
 
-  // Artist photo (admin)
   el('artist-photo-upload-btn').addEventListener('click', () => el('artist-photo-file').click());
   el('artist-photo-file').addEventListener('change', handleArtistPhotoUpload);
   el('artist-photo-remove-btn').addEventListener('click', removeArtistPhoto);
 
-  // Add painting panel
   el('add-panel-close-btn').addEventListener('click', closeAddPanel);
   el('img-strip-add-btn').addEventListener('click', () => el('img-file').click());
   el('img-file').addEventListener('change', handleImgUpload);
   el('save-painting-btn').addEventListener('click', saveNewPainting);
 
-  // Contact form
   el('contact-form-btn').addEventListener('click', submitContactForm);
 
-  // Delete confirm
   el('confirm-cancel-btn').addEventListener('click', closeConfirm);
   el('confirm-delete-btn').addEventListener('click', executeDeletion);
 
-  // Lightbox
   el('lightbox-close').addEventListener('click', closeLightbox);
   el('lightbox-prev').addEventListener('click', lightboxPrev);
   el('lightbox-next').addEventListener('click', lightboxNext);
-
-  // Close lightbox on backdrop click (but not on image or nav buttons)
-  el('lightbox-overlay').addEventListener('click', e => {
-    if (e.target === el('lightbox-overlay')) closeLightbox();
-  });
-
-  // Keyboard navigation for lightbox
+  el('lightbox-overlay').addEventListener('click', e => { if (e.target === el('lightbox-overlay')) closeLightbox(); });
   document.addEventListener('keydown', e => {
     if (!el('lightbox-overlay').classList.contains('open')) return;
     if (e.key === 'Escape')     closeLightbox();
@@ -1167,10 +1049,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (e.key === 'ArrowLeft')  lightboxPrev();
   });
 
-  // Load gallery from API, then check for existing admin session
   await loadArtworks();
   renderGallery();
   updateCartUI();
-
   if (isLoggedIn()) activateAdminMode();
 });
