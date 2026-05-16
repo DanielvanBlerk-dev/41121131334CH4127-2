@@ -13,7 +13,7 @@ let artworks        = [];
 let cart            = [];
 let isAdmin         = false;
 let pendingDeleteId = null;
-let newImgDataArray = [];   // base64 data URIs staged for upload
+let newImgDataArray = [];
 let squareCard      = null;
 let squarePayments  = null;
 let selectedPostage = null;
@@ -86,12 +86,11 @@ async function handleArtistPhotoUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
   const btn = el('artist-photo-upload-btn');
-  btn.textContent = 'Uploading…';
-  btn.disabled    = true;
-  const reader    = new FileReader();
-  reader.onload   = async ev => {
+  btn.textContent = 'Uploading…'; btn.disabled = true;
+  const reader = new FileReader();
+  reader.onload = async ev => {
     try {
-      const data  = await apiFetch('/api/update-artist-photo', {
+      const data = await apiFetch('/api/update-artist-photo', {
         method: 'POST',
         body:   JSON.stringify({ imgData: ev.target.result }),
       });
@@ -101,8 +100,7 @@ async function handleArtistPhotoUpload(e) {
       alert('Failed to upload photo. Please try again.');
       console.error(err);
     } finally {
-      btn.textContent = 'Change photo';
-      btn.disabled    = false;
+      btn.textContent = 'Change photo'; btn.disabled = false;
       el('artist-photo-file').value = '';
     }
   };
@@ -131,19 +129,15 @@ function buildCard(art) {
   imgWrap.className = 'artwork-img';
 
   const heroUrl = art.images && art.images.length > 0 ? art.images[0] : null;
-
   if (heroUrl) {
     const img = document.createElement('img');
-    img.src = heroUrl;
-    img.alt = art.title;
+    img.src = heroUrl; img.alt = art.title;
     imgWrap.appendChild(img);
   } else if (art.svg) {
     imgWrap.innerHTML = art.svg;
   }
 
-  if (heroUrl) {
-    imgWrap.addEventListener('click', () => openLightbox(art));
-  }
+  if (heroUrl) imgWrap.addEventListener('click', () => openLightbox(art));
 
   if (art.images && art.images.length > 1) {
     const badge = document.createElement('span');
@@ -154,8 +148,7 @@ function buildCard(art) {
 
   if (art.sold) {
     const overlay = document.createElement('div');
-    overlay.className   = 'sold-overlay';
-    overlay.textContent = 'Sold';
+    overlay.className = 'sold-overlay'; overlay.textContent = 'Sold';
     imgWrap.appendChild(overlay);
   }
 
@@ -176,18 +169,15 @@ function buildCard(art) {
   adminCtrl.className = 'admin-controls' + (isAdmin ? ' visible' : '');
 
   const soldBtn = document.createElement('button');
-  soldBtn.className   = 'admin-ctrl-btn sold-toggle';
+  soldBtn.className = 'admin-ctrl-btn sold-toggle';
   soldBtn.textContent = art.sold ? 'Mark available' : 'Mark sold';
   soldBtn.addEventListener('click', () => toggleSold(art.id));
 
   const delBtn = document.createElement('button');
-  delBtn.className   = 'admin-ctrl-btn del';
-  delBtn.textContent = 'Delete';
+  delBtn.className = 'admin-ctrl-btn del'; delBtn.textContent = 'Delete';
   delBtn.addEventListener('click', () => confirmDelete(art.id, art.title));
 
-  adminCtrl.appendChild(soldBtn);
-  adminCtrl.appendChild(delBtn);
-
+  adminCtrl.appendChild(soldBtn); adminCtrl.appendChild(delBtn);
   card.appendChild(imgWrap); card.appendChild(labelRow); card.appendChild(mediumEl);
   card.appendChild(addBtn);  card.appendChild(adminCtrl);
   return card;
@@ -197,10 +187,8 @@ function populateGrid(gridEl, items) {
   gridEl.innerHTML = '';
   if (items.length === 0) {
     const empty = document.createElement('p');
-    empty.className   = 'gallery-empty';
-    empty.textContent = 'No works in this collection yet.';
-    gridEl.appendChild(empty);
-    return;
+    empty.className = 'gallery-empty'; empty.textContent = 'No works in this collection yet.';
+    gridEl.appendChild(empty); return;
   }
   const frag = document.createDocumentFragment();
   items.forEach(art => frag.appendChild(buildCard(art)));
@@ -219,7 +207,6 @@ function inCart(id) { return cart.some(i => i.id === id); }
 /* ─── LIGHTBOX ────────────────────────────────────────────────────────────── */
 function openLightbox(art, startIdx = 0) {
   if (!art.images || art.images.length === 0) return;
-
   lightboxImages = art.images;
   lightboxIndex  = startIdx;
   lightboxTitle  = art.title;
@@ -237,13 +224,11 @@ function openLightbox(art, startIdx = 0) {
   const hasMult = art.images.length > 1;
   el('lightbox-prev').classList.toggle('hidden', !hasMult);
   el('lightbox-next').classList.toggle('hidden', !hasMult);
-
   el('lightbox-title').textContent = art.title;
   el('lightbox-img').src = art.images[startIdx];
   el('lightbox-img').alt = art.title;
   updateLightboxCounter();
   updateLightboxNavButtons();
-
   el('lightbox-overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
 }
@@ -287,28 +272,22 @@ function updateLightboxNavButtons() {
 
 /* ─── ADMIN AUTH ──────────────────────────────────────────────────────────── */
 function openLogin() {
-  el('admin-pw').value = '';
-  el('login-error').textContent = '';
+  el('admin-pw').value = ''; el('login-error').textContent = '';
   el('login-overlay').classList.add('open');
   setTimeout(() => el('admin-pw').focus(), 200);
 }
 function closeLogin() {
   el('login-overlay').classList.remove('open');
-  el('admin-pw').type             = 'password';
-  el('pw-toggle-btn').textContent = 'Show';
+  el('admin-pw').type = 'password'; el('pw-toggle-btn').textContent = 'Show';
 }
 
 async function attemptLogin() {
-  const pw    = el('admin-pw').value;
-  const btnEl = el('login-btn');
+  const pw = el('admin-pw').value; const btnEl = el('login-btn');
   if (!pw) { el('login-error').textContent = 'Please enter your password.'; return; }
   btnEl.disabled = true; btnEl.textContent = 'Signing in…';
   try {
     const data = await apiFetch('/api/login', { method: 'POST', body: JSON.stringify({ password: pw }) });
-    setToken(data.token);
-    isAdmin = true;
-    closeLogin();
-    activateAdminMode();
+    setToken(data.token); isAdmin = true; closeLogin(); activateAdminMode();
   } catch (e) {
     const msg =
       e.status === 401 ? 'Incorrect password.' :
@@ -318,17 +297,13 @@ async function attemptLogin() {
     el('login-error').textContent = msg;
     el('admin-pw').value = '';
     setTimeout(() => el('admin-pw').focus(), 50);
-  } finally {
-    btnEl.disabled = false; btnEl.textContent = 'Sign in';
-  }
+  } finally { btnEl.disabled = false; btnEl.textContent = 'Sign in'; }
 }
 
 async function adminLogout() {
-  try {
-    await apiFetch('/api/logout', { method: 'POST', body: JSON.stringify({}) });
-  } catch (e) { console.error('Server logout failed:', e); }
-  clearToken();
-  isAdmin = false;
+  try { await apiFetch('/api/logout', { method: 'POST', body: JSON.stringify({}) }); }
+  catch (e) { console.error('Server logout failed:', e); }
+  clearToken(); isAdmin = false;
   el('admin-bar').classList.remove('visible');
   el('admin-nav-link').classList.remove('active');
   el('about-photo-admin').classList.remove('visible');
@@ -362,8 +337,7 @@ function closeConfirm() { el('confirm-overlay').classList.remove('open'); }
 
 async function executeDeletion() {
   if (!pendingDeleteId) return;
-  const id = pendingDeleteId;
-  pendingDeleteId = null;
+  const id = pendingDeleteId; pendingDeleteId = null;
   el('confirm-overlay').classList.remove('open');
   try {
     await apiFetch('/api/paintings', { method: 'DELETE', body: JSON.stringify({ id }) });
@@ -379,20 +353,14 @@ function renderImgStrip() {
   strip.innerHTML = '';
 
   newImgDataArray.forEach((dataUri, i) => {
-    const tile = document.createElement('div');
-    tile.className = 'img-strip-thumb';
-
-    const img = document.createElement('img');
-    img.src = dataUri; img.alt = 'Image ' + (i + 1);
+    const tile = document.createElement('div'); tile.className = 'img-strip-thumb';
+    const img  = document.createElement('img'); img.src = dataUri; img.alt = 'Image ' + (i + 1);
     tile.appendChild(img);
-
     const removeBtn = document.createElement('button');
-    removeBtn.className   = 'img-strip-remove';
-    removeBtn.textContent = '×';
+    removeBtn.className = 'img-strip-remove'; removeBtn.textContent = '×';
     removeBtn.setAttribute('aria-label', 'Remove image ' + (i + 1));
     removeBtn.addEventListener('click', () => { newImgDataArray.splice(i, 1); renderImgStrip(); });
     tile.appendChild(removeBtn);
-
     strip.appendChild(tile);
   });
 
@@ -407,9 +375,7 @@ function openAddPanel() {
   el('new-category').value    = 'seascape';
   el('new-sold').checked      = false;
   el('add-error').textContent = '';
-  newImgDataArray = [];
-  renderImgStrip();
-  el('img-file').value = '';
+  newImgDataArray = []; renderImgStrip(); el('img-file').value = '';
 }
 
 function closeAddPanel() {
@@ -418,24 +384,17 @@ function closeAddPanel() {
 }
 
 function handleImgUpload(e) {
-  const files     = Array.from(e.target.files);
-  if (!files.length) return;
+  const files = Array.from(e.target.files); if (!files.length) return;
   const remaining = 10 - newImgDataArray.length;
   const toLoad    = files.slice(0, remaining);
-
-  if (files.length > remaining) {
-    el('add-error').textContent =
-      'Maximum 10 images per painting — ' + (files.length - remaining) + ' file(s) were not added.';
-  } else {
-    el('add-error').textContent = '';
-  }
-
+  el('add-error').textContent = files.length > remaining
+    ? 'Maximum 10 images per painting — ' + (files.length - remaining) + ' file(s) were not added.'
+    : '';
   let loaded = 0;
   toLoad.forEach(file => {
-    const reader  = new FileReader();
+    const reader = new FileReader();
     reader.onload = ev => {
-      newImgDataArray.push(ev.target.result);
-      loaded++;
+      newImgDataArray.push(ev.target.result); loaded++;
       if (loaded === toLoad.length) renderImgStrip();
     };
     reader.readAsDataURL(file);
@@ -443,19 +402,6 @@ function handleImgUpload(e) {
   e.target.value = '';
 }
 
-/**
- * saveNewPainting — two-phase upload
- *
- * Phase 1: POST /api/paintings with metadata only → receives artwork ID.
- * Phase 2: For each staged image, POST /api/upload-image with that ID.
- *          Each request carries exactly one image (≤4MB decoded), so
- *          Vercel's hard request body limit is never a constraint.
- *
- * Progress is shown per-image ("Uploading image 2 of 4…").
- * If an individual image fails the error is shown and the rest are skipped,
- * but the painting record is already saved — Michael can re-open and add
- * the remaining images later (once that workflow is built).
- */
 async function saveNewPainting() {
   const title    = el('new-title').value.trim();
   const medium   = el('new-medium').value.trim();
@@ -469,7 +415,6 @@ async function saveNewPainting() {
   const errEl    = el('add-error');
   const btn      = el('save-painting-btn');
 
-  // ── Client-side validation ──────────────────────────────────────────
   if (!title)  { errEl.textContent = 'Please enter a title.'; return; }
   if (!medium) { errEl.textContent = 'Please enter the medium and dimensions.'; return; }
   const price = parseInt(priceRaw, 10);
@@ -480,10 +425,9 @@ async function saveNewPainting() {
   if (isNaN(height) || height <= 0) { errEl.textContent = 'Please enter the packed height in cm.'; return; }
 
   errEl.textContent = '';
-  btn.disabled    = true;
-  btn.textContent = 'Saving…';
+  btn.disabled = true; btn.textContent = 'Saving…';
 
-  // ── Phase 1: create the artwork record (metadata only) ──────────────
+  // Phase 1: create artwork record (metadata only)
   let newId;
   try {
     const data = await apiFetch('/api/paintings', {
@@ -493,57 +437,40 @@ async function saveNewPainting() {
     newId = data.id;
   } catch (e) {
     errEl.textContent = e.message || 'Failed to save painting. Please try again.';
-    btn.disabled = false; btn.textContent = 'Save painting to gallery';
-    return;
+    btn.disabled = false; btn.textContent = 'Save painting to gallery'; return;
   }
 
-  // ── Phase 2: upload each image sequentially ─────────────────────────
-  // One request per image. Each is individually validated and size-checked
-  // server-side, so a 4MB-per-image limit applies cleanly with no
-  // total-payload problem.
-  const total        = newImgDataArray.length;
+  // Phase 2: upload each image sequentially — one request per image
+  const total = newImgDataArray.length;
   const failedImages = [];
-
   for (let i = 0; i < total; i++) {
     btn.textContent = `Uploading image ${i + 1} of ${total}…`;
     try {
       await apiFetch('/api/upload-image', {
         method: 'POST',
-        body:   JSON.stringify({
-          artworkId: newId,
-          imgData:   newImgDataArray[i],
-          index:     i,
-        }),
+        body:   JSON.stringify({ artworkId: newId, imgData: newImgDataArray[i], index: i }),
       });
     } catch (e) {
-      // Record which image failed but continue with the rest
       failedImages.push({ index: i + 1, reason: e.message || 'Unknown error' });
       console.error(`Image ${i + 1} upload failed:`, e);
     }
   }
 
-  // ── Reload gallery ──────────────────────────────────────────────────
   await loadArtworks();
   renderGallery();
 
-  // ── Report outcome ──────────────────────────────────────────────────
   if (failedImages.length === 0) {
-    // All good — close panel and scroll to the new card
     closeAddPanel();
     setTimeout(() => {
       const card = document.getElementById('card-' + newId);
       if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 200);
   } else {
-    // Painting was saved but some images failed — stay open and report
-    const failList = failedImages
-      .map(f => `Image ${f.index}: ${f.reason}`)
-      .join('\n');
+    const failList = failedImages.map(f => `Image ${f.index}: ${f.reason}`).join('\n');
     errEl.textContent =
       `Painting saved, but ${failedImages.length} image(s) failed to upload:\n${failList}\n` +
       'The painting has been added to your gallery. You can delete and re-add it to retry the images.';
-    btn.disabled    = false;
-    btn.textContent = 'Save painting to gallery';
+    btn.disabled = false; btn.textContent = 'Save painting to gallery';
   }
 }
 
@@ -569,10 +496,8 @@ function updateCartUI() {
   const emptyEl = el('cart-empty');
 
   if (count === 0) {
-    itemsEl.innerHTML = '';
-    itemsEl.appendChild(emptyEl);
-    emptyEl.style.display = 'block';
-    return;
+    itemsEl.innerHTML = ''; itemsEl.appendChild(emptyEl);
+    emptyEl.style.display = 'block'; return;
   }
 
   emptyEl.style.display = 'none';
@@ -582,14 +507,11 @@ function updateCartUI() {
   cart.forEach(art => {
     const item  = document.createElement('div'); item.className = 'cart-item';
     const thumb = document.createElement('div'); thumb.className = 'cart-item-thumb';
-
     const heroUrl = art.images && art.images.length > 0 ? art.images[0] : null;
     if (heroUrl) {
       const img = document.createElement('img'); img.src = heroUrl; img.alt = art.title;
       thumb.appendChild(img);
-    } else if (art.svg) {
-      thumb.innerHTML = art.svg;
-    }
+    } else if (art.svg) { thumb.innerHTML = art.svg; }
 
     const info      = document.createElement('div');
     const nameEl    = document.createElement('div'); nameEl.className = 'cart-item-name'; nameEl.textContent = art.title;
@@ -605,8 +527,7 @@ function updateCartUI() {
     frag.appendChild(item);
   });
 
-  itemsEl.innerHTML = '';
-  itemsEl.appendChild(frag);
+  itemsEl.innerHTML = ''; itemsEl.appendChild(frag);
 }
 
 function openCart() {
@@ -658,20 +579,19 @@ function buildOrderSummary() {
 function updateOrderSummary() { buildOrderSummary(); }
 
 async function openCheckout() {
-  closeCart();
-  document.body.style.overflow = 'hidden';
+  closeCart(); document.body.style.overflow = 'hidden';
   buildOrderSummary();
   el('checkout-modal').classList.add('open');
-  el('checkout-body').style.display  = 'block';
-  el('success-state').style.display  = 'none';
+  el('checkout-body').style.display = 'block';
+  el('success-state').style.display = 'none';
   if (!squareCard) await initSquare();
 }
 function closeCheckout() {
   el('checkout-modal').classList.remove('open');
   el('postage-result').innerHTML = '';
-  el('buyer-postcode').value     = '';
+  el('buyer-postcode').value    = '';
   selectedPostage = null;
-  document.body.style.overflow  = '';
+  document.body.style.overflow = '';
 }
 
 /* ─── ORDERS PANEL ────────────────────────────────────────────────────────── */
@@ -732,7 +652,8 @@ async function renderOrders() {
       [['Name', (c.firstName || '') + ' ' + (c.lastName || '')], ['Email', c.email || '—'], ['Phone', c.phone || '—']].forEach(([key, val]) => {
         const k = document.createElement('span'); k.className = 'order-detail-key'; k.textContent = key;
         const v = document.createElement('span'); v.className = 'order-detail-val';
-        if (key === 'Email' && c.email) { const a = document.createElement('a'); a.href = 'mailto:' + c.email; a.textContent = c.email; v.appendChild(a); } else v.textContent = val;
+        if (key === 'Email' && c.email) { const a = document.createElement('a'); a.href = 'mailto:' + c.email; a.textContent = c.email; v.appendChild(a); }
+        else v.textContent = val;
         custGrid.appendChild(k); custGrid.appendChild(v);
       });
       cardBody.appendChild(custGrid);
@@ -769,51 +690,92 @@ async function calculatePostage() {
     resultEl.innerHTML = '<p class="postage-error">Please enter a valid 4-digit postcode.</p>'; return;
   }
 
-  const itemsWithShipping = cart.filter(a => a.shipping?.weight > 0);
-  if (itemsWithShipping.length === 0) {
-    resultEl.innerHTML = '<p class="postage-error">Shipping details are not yet available for this item. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a quote.</p>';
+  // ── Build the items array ─────────────────────────────────────────────
+  // Every item in the cart needs its own parcel quote.
+  // If any item is missing shipping dimensions we can't quote reliably —
+  // show the contact-Michael fallback for the whole cart.
+  const itemsMissingDimensions = cart.filter(a =>
+    !a.shipping || !a.shipping.weight || a.shipping.weight <= 0
+  );
+  if (itemsMissingDimensions.length > 0) {
+    const names = itemsMissingDimensions.map(a => '"' + a.title + '"').join(', ');
+    resultEl.innerHTML =
+      `<p class="postage-error">Shipping dimensions are not set for ${names}. ` +
+      `Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a postage quote.</p>`;
     return;
   }
 
-  const heaviest = itemsWithShipping.reduce((max, art) => art.shipping.weight > max.shipping.weight ? art : max, itemsWithShipping[0]);
-  const shipping = heaviest.shipping;
+  // All items have dimensions — send the full list to the server.
+  // postage.js makes one AusPost call per item in parallel, intersects
+  // the available services, and sums the prices.
+  const items = cart.map(a => ({
+    weight: a.shipping.weight,
+    length: a.shipping.length,
+    width:  a.shipping.width,
+    height: a.shipping.height,
+  }));
 
   btn.disabled = true; btn.textContent = 'Calculating…';
-  resultEl.innerHTML = '<p class="postage-loading">Fetching rates from Australia Post…</p>';
+  const parcelWord = items.length === 1 ? 'parcel' : `${items.length} parcels`;
+  resultEl.innerHTML = `<p class="postage-loading">Fetching rates from Australia Post for ${parcelWord}…</p>`;
 
   try {
     const data = await apiFetch('/api/postage', {
       method: 'POST',
-      body: JSON.stringify({ toPostcode: postcode, weight: shipping.weight, length: shipping.length, width: shipping.width, height: shipping.height }),
+      body:   JSON.stringify({ toPostcode: postcode, items }),
     });
 
     if (data.services && data.services.length > 0) {
       selectedPostage = null;
       const servicesWrap = document.createElement('div'); servicesWrap.className = 'postage-services';
+
       const note = document.createElement('p'); note.className = 'postage-note';
-      note.textContent = `Postage from Airlie Beach (4802) to ${postcode}${cart.length > 1 ? ' — quoted for largest item' : ''}. Select a service:`;
+      note.textContent = items.length === 1
+        ? `Postage from Airlie Beach (4802) to ${postcode}. Select a service:`
+        : `Postage from Airlie Beach (4802) to ${postcode} — combined rate for ${items.length} parcels. Select a service:`;
       servicesWrap.appendChild(note);
 
       data.services.forEach((s, i) => {
-        const label = document.createElement('label'); label.className = 'postage-service postage-service-selectable'; label.htmlFor = 'postage-option-' + i;
-        const radio = document.createElement('input'); radio.type = 'radio'; radio.name = 'postage-option'; radio.id = 'postage-option-' + i; radio.value = i; radio.className = 'postage-radio';
-        radio.addEventListener('change', () => { selectedPostage = { name: s.name, price: s.price, quoteId: s.quoteId }; updateOrderSummary(); el('payment-error').style.display = 'none'; });
+        const label = document.createElement('label');
+        label.className = 'postage-service postage-service-selectable';
+        label.htmlFor   = 'postage-option-' + i;
+
+        const radio = document.createElement('input');
+        radio.type = 'radio'; radio.name = 'postage-option';
+        radio.id = 'postage-option-' + i; radio.value = i;
+        radio.className = 'postage-radio';
+        radio.addEventListener('change', () => {
+          selectedPostage = { name: s.name, price: s.price, quoteId: s.quoteId };
+          updateOrderSummary();
+          el('payment-error').style.display = 'none';
+        });
+
         const nameSpan = document.createElement('span'); nameSpan.className = 'postage-service-name'; nameSpan.textContent = s.name;
         const detailsSpan = document.createElement('span'); detailsSpan.className = 'postage-service-details';
-        if (s.deliveryTime) { const d = document.createElement('span'); d.className = 'postage-delivery'; d.textContent = s.deliveryTime; detailsSpan.appendChild(d); }
+        if (s.deliveryTime) {
+          const d = document.createElement('span'); d.className = 'postage-delivery'; d.textContent = s.deliveryTime;
+          detailsSpan.appendChild(d);
+        }
         const priceSpan = document.createElement('span'); priceSpan.className = 'postage-price'; priceSpan.textContent = 'AUD $' + s.price.toFixed(2);
         detailsSpan.appendChild(priceSpan);
+
         label.appendChild(radio); label.appendChild(nameSpan); label.appendChild(detailsSpan);
         servicesWrap.appendChild(label);
       });
 
       const disclaimer = document.createElement('p'); disclaimer.className = 'postage-disclaimer';
-      disclaimer.textContent = 'Selected postage will be added to your total. Michael will confirm and dispatch once payment is received.';
+      disclaimer.textContent = items.length === 1
+        ? 'Selected postage will be added to your total. Michael will confirm and dispatch once payment is received.'
+        : `Combined postage for all ${items.length} works. Each will be carefully packaged and dispatched separately once payment is received.`;
       servicesWrap.appendChild(disclaimer);
+
       resultEl.innerHTML = ''; resultEl.appendChild(servicesWrap);
+
     } else {
       selectedPostage = null;
-      resultEl.innerHTML = `<p class="postage-error">${data.message || 'No postage options found. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a quote.'}</p>`;
+      resultEl.innerHTML = `<p class="postage-error">${
+        data.message || 'No postage options found. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a quote.'
+      }</p>`;
     }
   } catch (e) {
     resultEl.innerHTML = '<p class="postage-error">Could not calculate postage. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a shipping quote.</p>';
@@ -842,9 +804,7 @@ async function submitContactForm() {
     el('contact-name').value = ''; el('contact-email').value = ''; el('contact-message').value = '';
   } catch (e) {
     errEl.textContent = e.message || 'Message could not be sent. Please email Michael directly.';
-  } finally {
-    btn.disabled = false; btn.textContent = 'Send message';
-  }
+  } finally { btn.disabled = false; btn.textContent = 'Send message'; }
 }
 
 /* ─── SQUARE ──────────────────────────────────────────────────────────────── */
