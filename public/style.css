@@ -76,6 +76,7 @@ nav {
 /* ─── ADMIN BAR ───────────────────────────────────────────────────────────── */
 .admin-bar {
   display: none;
+  position: sticky; top: 0; z-index: 101; /* sits above nav (z-index 100) */
   background: var(--ink); color: var(--warm-white);
   padding: 0.5rem 3rem;
   min-height: 44px; height: auto;   /* expands to fit when buttons wrap */
