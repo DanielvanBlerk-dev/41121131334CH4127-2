@@ -48,29 +48,22 @@ const DEFAULT_ARTWORKS = [
  * Normalises an artwork record from any historical shape into the current shape.
  *
  * History of the image field:
- *   v1 — imgData: string   (base64, stored directly in Redis — deprecated)
+ *   v1 — imgData: string   (base64 stored in Redis — deprecated)
  *   v2 — imgUrl:  string   (single Vercel Blob CDN URL)
- *   v3 — images:  string[] (array of Vercel Blob CDN URLs — current)
+ *   v3 — images:  string[] (array of CDN URLs — current)
  *
- * This function ensures the browser always receives images[] regardless of
- * which era the record was written in. imgData is always stripped (never
- * sent over the wire — it would bloat the payload from KB to MB).
+ * Always produces images[] so the browser only ever sees one shape.
+ * imgData is always stripped — never sent over the wire.
  */
 function normaliseArtwork(a) {
-  // Build images[] from whatever shape this record uses
   let images;
-
   if (Array.isArray(a.images) && a.images.length > 0) {
-    // v3 — already correct
-    images = a.images;
+    images = a.images;           // v3 — already correct
   } else if (a.imgUrl) {
-    // v2 — single Blob URL, wrap it
-    images = [a.imgUrl];
+    images = [a.imgUrl];         // v2 — wrap single URL
   } else {
-    // v1 (base64 only) or no image — empty array, SVG placeholder will show
-    images = [];
+    images = [];                 // v1 or no image — SVG placeholder will show
   }
-
   return {
     ...a,
     images,
@@ -79,10 +72,42 @@ function normaliseArtwork(a) {
   };
 }
 
+/**
+ * Sets CORS headers that allow in-app browsers (Facebook Messenger,
+ * Instagram, WhatsApp, etc.) to fetch gallery data successfully.
+ *
+ * Why this is safe:
+ *   This endpoint is read-only and public — it returns no user data
+ *   and requires no authentication. Mutating endpoints (paintings,
+ *   payment, admin actions) are unchanged and still protected by
+ *   CSRF + JWT.
+ *
+ * Why in-app browsers need this:
+ *   Facebook/Meta's in-app browser enforces stricter CORS policies
+ *   than Chrome or Safari. Without an explicit Access-Control-Allow-Origin
+ *   header the browser may block the fetch() response even when the
+ *   server returned 200, causing the gallery to silently stay empty.
+ */
+function setCorsHeaders(res) {
+  res.setHeader('Access-Control-Allow-Origin',  '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+}
+
 export default async function handler(req, res) {
+
+  // Handle OPTIONS preflight — in-app browsers sometimes send this before GET
+  if (req.method === 'OPTIONS') {
+    setCorsHeaders(res);
+    return res.status(204).end();
+  }
+
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  // Set CORS headers on every GET response
+  setCorsHeaders(res);
 
   try {
     let artworks = await redis.get('artworks');
@@ -95,7 +120,7 @@ export default async function handler(req, res) {
     // stripping imgData and legacy imgUrl in the process.
     const artworksClean = artworks.map(normaliseArtwork);
 
-    // Artist photo — try new Blob URL key first, fall back to legacy base64 key
+    // Artist photo — try Blob URL key first, fall back to legacy base64 key
     const artistPhotoUrl    = await redis.get('artist-photo-url') || null;
     const artistPhotoLegacy = !artistPhotoUrl ? (await redis.get('artist-photo') || null) : null;
     const artistPhoto       = artistPhotoUrl || artistPhotoLegacy;
@@ -104,6 +129,10 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error('get-artworks error:', err);
-    return res.status(200).json({ artworks: DEFAULT_ARTWORKS.map(normaliseArtwork), artistPhoto: null });
+    // Return default artworks on Redis failure so the page is never blank
+    return res.status(200).json({
+      artworks:    DEFAULT_ARTWORKS.map(normaliseArtwork),
+      artistPhoto: null,
+    });
   }
 }

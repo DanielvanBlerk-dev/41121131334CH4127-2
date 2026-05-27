@@ -24,6 +24,13 @@ let lightboxImages = [];
 let lightboxIndex  = 0;
 let lightboxTitle  = '';
 
+/* ─── HELPER ──────────────────────────────────────────────────────────────── */
+function el(id) {
+  const element = document.getElementById(id);
+  if (!element) console.warn('Element not found:', id);
+  return element;
+}
+
 /* ─── API HELPERS ─────────────────────────────────────────────────────────── */
 async function apiFetch(path, options = {}) {
   const token = getToken();
@@ -51,34 +58,47 @@ async function apiFetch(path, options = {}) {
 }
 
 /* ─── GALLERY ─────────────────────────────────────────────────────────────── */
+
+/**
+ * Loads artworks from the API with a fallback to empty state.
+ * Never throws — a failed load shows an empty gallery rather than
+ * a broken page.
+ */
 async function loadArtworks() {
   try {
     const data  = await apiFetch('/api/get-artworks');
-    artworks    = data.artworks    || [];
+    artworks    = Array.isArray(data.artworks) ? data.artworks : [];
     artistPhoto = data.artistPhoto || null;
     renderArtistPhoto();
   } catch (e) {
     console.error('Failed to load artworks:', e);
-    artworks    = [];
-    artistPhoto = null;
+    // Keep whatever artworks we already have (e.g. from a previous
+    // successful load) rather than wiping them on a transient error.
+    if (artworks.length === 0) artworks = [];
+    artistPhoto = artistPhoto || null;
   }
 }
 
 /* ─── ARTIST PHOTO ────────────────────────────────────────────────────────── */
 function renderArtistPhoto() {
-  const wrap     = el('about-photo');
-  const label    = el('about-photo-label');
-  const existing = wrap.querySelector('img');
-  if (existing) existing.remove();
+  try {
+    const wrap     = el('about-photo');
+    const label    = el('about-photo-label');
+    if (!wrap) return;
+    const existing = wrap.querySelector('img');
+    if (existing) existing.remove();
 
-  if (artistPhoto) {
-    const img = document.createElement('img');
-    img.src = artistPhoto;
-    img.alt = 'Michael van Blerk — artist';
-    wrap.appendChild(img);
-    if (label) label.style.display = 'none';
-  } else {
-    if (label) label.style.display = '';
+    if (artistPhoto) {
+      const img = document.createElement('img');
+      img.src = artistPhoto;
+      img.alt = 'Michael van Blerk — artist';
+      wrap.appendChild(img);
+      if (label) label.style.display = 'none';
+    } else {
+      if (label) label.style.display = '';
+    }
+  } catch (e) {
+    console.error('renderArtistPhoto failed:', e);
   }
 }
 
@@ -120,123 +140,171 @@ async function removeArtistPhoto() {
 }
 
 /* ─── GALLERY CARDS ───────────────────────────────────────────────────────── */
+
+/**
+ * Builds a single artwork card element.
+ * Wrapped in try/catch so a malformed artwork record doesn't
+ * prevent the rest of the gallery from rendering.
+ */
 function buildCard(art) {
-  const card = document.createElement('div');
-  card.className = 'artwork-card';
-  card.id = 'card-' + art.id;
+  try {
+    const card = document.createElement('div');
+    card.className = 'artwork-card';
+    card.id = 'card-' + art.id;
 
-  const imgWrap = document.createElement('div');
-  imgWrap.className = 'artwork-img';
+    const imgWrap = document.createElement('div');
+    imgWrap.className = 'artwork-img';
 
-  const heroUrl = art.images && art.images.length > 0 ? art.images[0] : null;
-  if (heroUrl) {
-    const img = document.createElement('img');
-    img.src = heroUrl; img.alt = art.title;
-    imgWrap.appendChild(img);
-  } else if (art.svg) {
-    imgWrap.innerHTML = art.svg;
+    const heroUrl = art.images && art.images.length > 0 ? art.images[0] : null;
+    if (heroUrl) {
+      const img = document.createElement('img');
+      img.src = heroUrl; img.alt = art.title || '';
+      // onerror fallback — if the CDN image fails to load, show nothing
+      // rather than a broken image icon
+      img.onerror = () => { img.style.display = 'none'; };
+      imgWrap.appendChild(img);
+    } else if (art.svg) {
+      imgWrap.innerHTML = art.svg;
+    }
+
+    if (heroUrl) imgWrap.addEventListener('click', () => openLightbox(art));
+
+    if (art.images && art.images.length > 1) {
+      const badge = document.createElement('span');
+      badge.className   = 'artwork-img-count';
+      badge.textContent = art.images.length + ' photos';
+      imgWrap.appendChild(badge);
+    }
+
+    if (art.sold) {
+      const overlay = document.createElement('div');
+      overlay.className = 'sold-overlay'; overlay.textContent = 'Sold';
+      imgWrap.appendChild(overlay);
+    }
+
+    const labelRow = document.createElement('div'); labelRow.className = 'artwork-label';
+    const titleEl  = document.createElement('span'); titleEl.className  = 'artwork-title'; titleEl.textContent = art.title || 'Untitled';
+    const priceEl  = document.createElement('span'); priceEl.className  = 'artwork-price'; priceEl.textContent = 'AUD $' + (art.price || 0).toLocaleString();
+    labelRow.appendChild(titleEl); labelRow.appendChild(priceEl);
+
+    const mediumEl = document.createElement('div'); mediumEl.className = 'artwork-medium'; mediumEl.textContent = art.medium || '';
+
+    const addBtn = document.createElement('button');
+    addBtn.className   = 'add-btn' + (inCart(art.id) ? ' added' : '');
+    addBtn.disabled    = art.sold || inCart(art.id);
+    addBtn.textContent = art.sold ? 'Sold' : inCart(art.id) ? 'In your selection' : '+ Add to selection';
+    addBtn.addEventListener('click', () => addToCart(art.id));
+
+    const adminCtrl = document.createElement('div');
+    adminCtrl.className = 'admin-controls' + (isAdmin ? ' visible' : '');
+
+    const soldBtn = document.createElement('button');
+    soldBtn.className = 'admin-ctrl-btn sold-toggle';
+    soldBtn.textContent = art.sold ? 'Mark available' : 'Mark sold';
+    soldBtn.addEventListener('click', () => toggleSold(art.id));
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'admin-ctrl-btn del'; delBtn.textContent = 'Delete';
+    delBtn.addEventListener('click', () => confirmDelete(art.id, art.title));
+
+    adminCtrl.appendChild(soldBtn); adminCtrl.appendChild(delBtn);
+    card.appendChild(imgWrap); card.appendChild(labelRow); card.appendChild(mediumEl);
+    card.appendChild(addBtn);  card.appendChild(adminCtrl);
+    return card;
+
+  } catch (e) {
+    console.error('buildCard failed for artwork:', art?.id, e);
+    return null; // populateGrid skips null cards
   }
-
-  if (heroUrl) imgWrap.addEventListener('click', () => openLightbox(art));
-
-  if (art.images && art.images.length > 1) {
-    const badge = document.createElement('span');
-    badge.className   = 'artwork-img-count';
-    badge.textContent = art.images.length + ' photos';
-    imgWrap.appendChild(badge);
-  }
-
-  if (art.sold) {
-    const overlay = document.createElement('div');
-    overlay.className = 'sold-overlay'; overlay.textContent = 'Sold';
-    imgWrap.appendChild(overlay);
-  }
-
-  const labelRow = document.createElement('div'); labelRow.className = 'artwork-label';
-  const titleEl  = document.createElement('span'); titleEl.className  = 'artwork-title'; titleEl.textContent = art.title;
-  const priceEl  = document.createElement('span'); priceEl.className  = 'artwork-price'; priceEl.textContent = 'AUD $' + art.price.toLocaleString();
-  labelRow.appendChild(titleEl); labelRow.appendChild(priceEl);
-
-  const mediumEl = document.createElement('div'); mediumEl.className = 'artwork-medium'; mediumEl.textContent = art.medium;
-
-  const addBtn = document.createElement('button');
-  addBtn.className   = 'add-btn' + (inCart(art.id) ? ' added' : '');
-  addBtn.disabled    = art.sold || inCart(art.id);
-  addBtn.textContent = art.sold ? 'Sold' : inCart(art.id) ? 'In your selection' : '+ Add to selection';
-  addBtn.addEventListener('click', () => addToCart(art.id));
-
-  const adminCtrl = document.createElement('div');
-  adminCtrl.className = 'admin-controls' + (isAdmin ? ' visible' : '');
-
-  const soldBtn = document.createElement('button');
-  soldBtn.className = 'admin-ctrl-btn sold-toggle';
-  soldBtn.textContent = art.sold ? 'Mark available' : 'Mark sold';
-  soldBtn.addEventListener('click', () => toggleSold(art.id));
-
-  const delBtn = document.createElement('button');
-  delBtn.className = 'admin-ctrl-btn del'; delBtn.textContent = 'Delete';
-  delBtn.addEventListener('click', () => confirmDelete(art.id, art.title));
-
-  adminCtrl.appendChild(soldBtn); adminCtrl.appendChild(delBtn);
-  card.appendChild(imgWrap); card.appendChild(labelRow); card.appendChild(mediumEl);
-  card.appendChild(addBtn);  card.appendChild(adminCtrl);
-  return card;
 }
 
+/**
+ * Populates a grid element with cards.
+ * Skips any card that failed to build rather than throwing.
+ */
 function populateGrid(gridEl, items) {
+  if (!gridEl) return;
   gridEl.innerHTML = '';
-  if (items.length === 0) {
+  if (!items || items.length === 0) {
     const empty = document.createElement('p');
     empty.className = 'gallery-empty'; empty.textContent = 'No works in this collection yet.';
     gridEl.appendChild(empty); return;
   }
   const frag = document.createDocumentFragment();
-  items.forEach(art => frag.appendChild(buildCard(art)));
-  gridEl.appendChild(frag);
+  let built = 0;
+  items.forEach(art => {
+    const card = buildCard(art);
+    if (card) { frag.appendChild(card); built++; }
+  });
+  if (built === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'gallery-empty'; empty.textContent = 'No works in this collection yet.';
+    gridEl.appendChild(empty);
+  } else {
+    gridEl.appendChild(frag);
+  }
 }
 
+/**
+ * Renders both gallery sections.
+ * Wrapped in try/catch so a rendering error doesn't crash the page.
+ */
 function renderGallery() {
-  const seascapes  = artworks.filter(a => a.category === 'seascape');
-  const figurative = artworks.filter(a => a.category === 'figurative' || !a.category);
-  populateGrid(el('gallery-seascapes'),  seascapes);
-  populateGrid(el('gallery-figurative'), figurative);
+  try {
+    const seascapes  = artworks.filter(a => a && a.category === 'seascape');
+    const figurative = artworks.filter(a => a && (a.category === 'figurative' || !a.category));
+    populateGrid(el('gallery-seascapes'),  seascapes);
+    populateGrid(el('gallery-figurative'), figurative);
+  } catch (e) {
+    console.error('renderGallery failed:', e);
+  }
 }
 
 function inCart(id) { return cart.some(i => i.id === id); }
 
 /* ─── LIGHTBOX ────────────────────────────────────────────────────────────── */
 function openLightbox(art, startIdx = 0) {
-  if (!art.images || art.images.length === 0) return;
-  lightboxImages = art.images;
-  lightboxIndex  = startIdx;
-  lightboxTitle  = art.title;
+  try {
+    if (!art.images || art.images.length === 0) return;
+    lightboxImages = art.images;
+    lightboxIndex  = startIdx;
+    lightboxTitle  = art.title;
 
-  const dotsEl = el('lightbox-dots');
-  dotsEl.innerHTML = '';
-  art.images.forEach((_, i) => {
-    const dot = document.createElement('button');
-    dot.className = 'lightbox-dot' + (i === startIdx ? ' active' : '');
-    dot.setAttribute('aria-label', 'Image ' + (i + 1));
-    dot.addEventListener('click', () => showLightboxImage(i));
-    dotsEl.appendChild(dot);
-  });
+    const dotsEl = el('lightbox-dots');
+    dotsEl.innerHTML = '';
+    art.images.forEach((_, i) => {
+      const dot = document.createElement('button');
+      dot.className = 'lightbox-dot' + (i === startIdx ? ' active' : '');
+      dot.setAttribute('aria-label', 'Image ' + (i + 1));
+      dot.addEventListener('click', () => showLightboxImage(i));
+      dotsEl.appendChild(dot);
+    });
 
-  const hasMult = art.images.length > 1;
-  el('lightbox-prev').classList.toggle('hidden', !hasMult);
-  el('lightbox-next').classList.toggle('hidden', !hasMult);
-  el('lightbox-title').textContent = art.title;
-  el('lightbox-img').src = art.images[startIdx];
-  el('lightbox-img').alt = art.title;
-  updateLightboxCounter();
-  updateLightboxNavButtons();
-  el('lightbox-overlay').classList.add('open');
-  document.body.style.overflow = 'hidden';
+    const hasMult = art.images.length > 1;
+    el('lightbox-prev').classList.toggle('hidden', !hasMult);
+    el('lightbox-next').classList.toggle('hidden', !hasMult);
+    el('lightbox-title').textContent = art.title;
+    el('lightbox-img').src = art.images[startIdx];
+    el('lightbox-img').alt = art.title;
+    updateLightboxCounter();
+    updateLightboxNavButtons();
+    el('lightbox-overlay').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  } catch (e) {
+    console.error('openLightbox failed:', e);
+  }
 }
 
 function closeLightbox() {
-  el('lightbox-overlay').classList.remove('open');
-  document.body.style.overflow = '';
-  setTimeout(() => { el('lightbox-img').src = ''; lightboxImages = []; }, 250);
+  try {
+    el('lightbox-overlay').classList.remove('open');
+    document.body.style.overflow = '';
+    setTimeout(() => {
+      const img = el('lightbox-img');
+      if (img) img.src = '';
+      lightboxImages = [];
+    }, 250);
+  } catch (e) { console.error('closeLightbox failed:', e); }
 }
 
 function showLightboxImage(idx) {
@@ -350,6 +418,7 @@ async function executeDeletion() {
 function renderImgStrip() {
   const strip   = el('img-strip');
   const addWrap = el('img-strip-add');
+  if (!strip || !addWrap) return;
   strip.innerHTML = '';
 
   newImgDataArray.forEach((dataUri, i) => {
@@ -427,7 +496,7 @@ async function saveNewPainting() {
   errEl.textContent = '';
   btn.disabled = true; btn.textContent = 'Saving…';
 
-  // Phase 1: create artwork record (metadata only)
+  // Phase 1: create artwork record
   let newId;
   try {
     const data = await apiFetch('/api/paintings', {
@@ -440,7 +509,7 @@ async function saveNewPainting() {
     btn.disabled = false; btn.textContent = 'Save painting to gallery'; return;
   }
 
-  // Phase 2: upload each image sequentially — one request per image
+  // Phase 2: upload images sequentially
   const total = newImgDataArray.length;
   const failedImages = [];
   for (let i = 0; i < total; i++) {
@@ -486,48 +555,53 @@ function removeFromCart(id) {
 }
 
 function updateCartUI() {
-  const count = cart.length;
-  el('cart-count').textContent = count;
-  el('checkout-btn').disabled  = count === 0;
-  const total = cart.reduce((s, i) => s + i.price, 0);
-  el('cart-total').textContent = 'AUD $' + total.toLocaleString();
+  try {
+    const count = cart.length;
+    el('cart-count').textContent = count;
+    el('checkout-btn').disabled  = count === 0;
+    const total = cart.reduce((s, i) => s + i.price, 0);
+    el('cart-total').textContent = 'AUD $' + total.toLocaleString();
 
-  const itemsEl = el('cart-items');
-  const emptyEl = el('cart-empty');
+    const itemsEl = el('cart-items');
+    const emptyEl = el('cart-empty');
 
-  if (count === 0) {
-    itemsEl.innerHTML = ''; itemsEl.appendChild(emptyEl);
-    emptyEl.style.display = 'block'; return;
+    if (count === 0) {
+      itemsEl.innerHTML = ''; itemsEl.appendChild(emptyEl);
+      emptyEl.style.display = 'block'; return;
+    }
+
+    emptyEl.style.display = 'none';
+    const frag = document.createDocumentFragment();
+    frag.appendChild(emptyEl);
+
+    cart.forEach(art => {
+      const item  = document.createElement('div'); item.className = 'cart-item';
+      const thumb = document.createElement('div'); thumb.className = 'cart-item-thumb';
+      const heroUrl = art.images && art.images.length > 0 ? art.images[0] : null;
+      if (heroUrl) {
+        const img = document.createElement('img'); img.src = heroUrl; img.alt = art.title;
+        img.onerror = () => { img.style.display = 'none'; };
+        thumb.appendChild(img);
+      } else if (art.svg) { thumb.innerHTML = art.svg; }
+
+      const info      = document.createElement('div');
+      const nameEl    = document.createElement('div'); nameEl.className = 'cart-item-name'; nameEl.textContent = art.title;
+      const metaEl    = document.createElement('div'); metaEl.className = 'cart-item-meta'; metaEl.textContent = art.medium;
+      const removeBtn = document.createElement('button'); removeBtn.className = 'remove-item'; removeBtn.textContent = 'Remove';
+      removeBtn.addEventListener('click', () => removeFromCart(art.id));
+      info.appendChild(nameEl); info.appendChild(metaEl); info.appendChild(removeBtn);
+
+      const priceEl = document.createElement('div'); priceEl.className = 'cart-item-price';
+      priceEl.textContent = '$' + art.price.toLocaleString();
+
+      item.appendChild(thumb); item.appendChild(info); item.appendChild(priceEl);
+      frag.appendChild(item);
+    });
+
+    itemsEl.innerHTML = ''; itemsEl.appendChild(frag);
+  } catch (e) {
+    console.error('updateCartUI failed:', e);
   }
-
-  emptyEl.style.display = 'none';
-  const frag = document.createDocumentFragment();
-  frag.appendChild(emptyEl);
-
-  cart.forEach(art => {
-    const item  = document.createElement('div'); item.className = 'cart-item';
-    const thumb = document.createElement('div'); thumb.className = 'cart-item-thumb';
-    const heroUrl = art.images && art.images.length > 0 ? art.images[0] : null;
-    if (heroUrl) {
-      const img = document.createElement('img'); img.src = heroUrl; img.alt = art.title;
-      thumb.appendChild(img);
-    } else if (art.svg) { thumb.innerHTML = art.svg; }
-
-    const info      = document.createElement('div');
-    const nameEl    = document.createElement('div'); nameEl.className = 'cart-item-name'; nameEl.textContent = art.title;
-    const metaEl    = document.createElement('div'); metaEl.className = 'cart-item-meta'; metaEl.textContent = art.medium;
-    const removeBtn = document.createElement('button'); removeBtn.className = 'remove-item'; removeBtn.textContent = 'Remove';
-    removeBtn.addEventListener('click', () => removeFromCart(art.id));
-    info.appendChild(nameEl); info.appendChild(metaEl); info.appendChild(removeBtn);
-
-    const priceEl = document.createElement('div'); priceEl.className = 'cart-item-price';
-    priceEl.textContent = '$' + art.price.toLocaleString();
-
-    item.appendChild(thumb); item.appendChild(info); item.appendChild(priceEl);
-    frag.appendChild(item);
-  });
-
-  itemsEl.innerHTML = ''; itemsEl.appendChild(frag);
 }
 
 function openCart() {
@@ -625,7 +699,6 @@ async function renderOrders() {
       head.appendChild(idEl); head.appendChild(dateEl);
 
       const cardBody = document.createElement('div'); cardBody.className = 'order-card-body';
-
       const worksLabel = document.createElement('div'); worksLabel.className = 'order-section-label'; worksLabel.textContent = 'Works Sold';
       cardBody.appendChild(worksLabel);
       (order.items || []).forEach(item => {
@@ -690,13 +763,7 @@ async function calculatePostage() {
     resultEl.innerHTML = '<p class="postage-error">Please enter a valid 4-digit postcode.</p>'; return;
   }
 
-  // ── Build the items array ─────────────────────────────────────────────
-  // Every item in the cart needs its own parcel quote.
-  // If any item is missing shipping dimensions we can't quote reliably —
-  // show the contact-Michael fallback for the whole cart.
-  const itemsMissingDimensions = cart.filter(a =>
-    !a.shipping || !a.shipping.weight || a.shipping.weight <= 0
-  );
+  const itemsMissingDimensions = cart.filter(a => !a.shipping || !a.shipping.weight || a.shipping.weight <= 0);
   if (itemsMissingDimensions.length > 0) {
     const names = itemsMissingDimensions.map(a => '"' + a.title + '"').join(', ');
     resultEl.innerHTML =
@@ -705,14 +772,9 @@ async function calculatePostage() {
     return;
   }
 
-  // All items have dimensions — send the full list to the server.
-  // postage.js makes one AusPost call per item in parallel, intersects
-  // the available services, and sums the prices.
   const items = cart.map(a => ({
-    weight: a.shipping.weight,
-    length: a.shipping.length,
-    width:  a.shipping.width,
-    height: a.shipping.height,
+    weight: a.shipping.weight, length: a.shipping.length,
+    width:  a.shipping.width,  height: a.shipping.height,
   }));
 
   btn.disabled = true; btn.textContent = 'Calculating…';
@@ -728,7 +790,6 @@ async function calculatePostage() {
     if (data.services && data.services.length > 0) {
       selectedPostage = null;
       const servicesWrap = document.createElement('div'); servicesWrap.className = 'postage-services';
-
       const note = document.createElement('p'); note.className = 'postage-note';
       note.textContent = items.length === 1
         ? `Postage from Airlie Beach (4802) to ${postcode}. Select a service:`
@@ -737,28 +798,19 @@ async function calculatePostage() {
 
       data.services.forEach((s, i) => {
         const label = document.createElement('label');
-        label.className = 'postage-service postage-service-selectable';
-        label.htmlFor   = 'postage-option-' + i;
-
+        label.className = 'postage-service postage-service-selectable'; label.htmlFor = 'postage-option-' + i;
         const radio = document.createElement('input');
-        radio.type = 'radio'; radio.name = 'postage-option';
-        radio.id = 'postage-option-' + i; radio.value = i;
-        radio.className = 'postage-radio';
+        radio.type = 'radio'; radio.name = 'postage-option'; radio.id = 'postage-option-' + i;
+        radio.value = i; radio.className = 'postage-radio';
         radio.addEventListener('change', () => {
           selectedPostage = { name: s.name, price: s.price, quoteId: s.quoteId };
-          updateOrderSummary();
-          el('payment-error').style.display = 'none';
+          updateOrderSummary(); el('payment-error').style.display = 'none';
         });
-
         const nameSpan = document.createElement('span'); nameSpan.className = 'postage-service-name'; nameSpan.textContent = s.name;
         const detailsSpan = document.createElement('span'); detailsSpan.className = 'postage-service-details';
-        if (s.deliveryTime) {
-          const d = document.createElement('span'); d.className = 'postage-delivery'; d.textContent = s.deliveryTime;
-          detailsSpan.appendChild(d);
-        }
+        if (s.deliveryTime) { const d = document.createElement('span'); d.className = 'postage-delivery'; d.textContent = s.deliveryTime; detailsSpan.appendChild(d); }
         const priceSpan = document.createElement('span'); priceSpan.className = 'postage-price'; priceSpan.textContent = 'AUD $' + s.price.toFixed(2);
         detailsSpan.appendChild(priceSpan);
-
         label.appendChild(radio); label.appendChild(nameSpan); label.appendChild(detailsSpan);
         servicesWrap.appendChild(label);
       });
@@ -768,14 +820,10 @@ async function calculatePostage() {
         ? 'Selected postage will be added to your total. Michael will confirm and dispatch once payment is received.'
         : `Combined postage for all ${items.length} works. Each will be carefully packaged and dispatched separately once payment is received.`;
       servicesWrap.appendChild(disclaimer);
-
       resultEl.innerHTML = ''; resultEl.appendChild(servicesWrap);
-
     } else {
       selectedPostage = null;
-      resultEl.innerHTML = `<p class="postage-error">${
-        data.message || 'No postage options found. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a quote.'
-      }</p>`;
+      resultEl.innerHTML = `<p class="postage-error">${data.message || 'No postage options found. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a quote.'}</p>`;
     }
   } catch (e) {
     resultEl.innerHTML = '<p class="postage-error">Could not calculate postage. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a shipping quote.</p>';
@@ -902,8 +950,7 @@ async function processPayment(sourceId, fields) {
     await squareCard.clear?.();
     await loadArtworks();
     cart = []; selectedPostage = null;
-    updateCartUI();
-    showSuccess(data.orderId);
+    updateCartUI(); showSuccess(data.orderId);
   } catch (e) {
     const msg = isSafeServerMessage(e.message)
       ? e.message
@@ -947,70 +994,102 @@ function resetShop() {
   renderGallery(); closeCheckout();
 }
 
-/* ─── HELPER ──────────────────────────────────────────────────────────────── */
-function el(id) { return document.getElementById(id); }
-
 /* ─── BOOT ────────────────────────────────────────────────────────────────── */
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
 
-  el('cart-toggle-btn').addEventListener('click', toggleCart);
-  el('admin-nav-link').addEventListener('click', e => { e.preventDefault(); openLogin(); });
+  // ── Wire up all event listeners first ──────────────────────────────────
+  // Done in a try/catch per listener so one bad wire-up doesn't
+  // prevent the rest from attaching.
+  const wire = (id, event, fn) => {
+    try {
+      const element = el(id);
+      if (element) element.addEventListener(event, fn);
+      else console.warn('Could not wire event — element not found:', id);
+    } catch (e) { console.error('Failed to wire event on', id, e); }
+  };
 
-  el('cart-overlay').addEventListener('click', closeCart);
-  el('cart-close-btn').addEventListener('click', closeCart);
-  el('checkout-btn').addEventListener('click', openCheckout);
-
-  el('checkout-close-btn').addEventListener('click', closeCheckout);
-  el('pay-btn').addEventListener('click', handlePayment);
-  el('postage-calc-btn').addEventListener('click', calculatePostage);
-  el('buyer-postcode').addEventListener('keydown', e => { if (e.key === 'Enter') calculatePostage(); });
-
-  el('success-continue-btn').addEventListener('click', resetShop);
-
-  el('login-btn').addEventListener('click', attemptLogin);
-  el('login-cancel-btn').addEventListener('click', closeLogin);
-  el('admin-pw').addEventListener('keydown', e => { if (e.key === 'Enter') attemptLogin(); });
-  el('pw-toggle-btn').addEventListener('click', () => {
+  wire('cart-toggle-btn',        'click', toggleCart);
+  wire('admin-nav-link',         'click', e => { e.preventDefault(); openLogin(); });
+  wire('cart-overlay',           'click', closeCart);
+  wire('cart-close-btn',         'click', closeCart);
+  wire('checkout-btn',           'click', openCheckout);
+  wire('checkout-close-btn',     'click', closeCheckout);
+  wire('pay-btn',                'click', handlePayment);
+  wire('postage-calc-btn',       'click', calculatePostage);
+  wire('buyer-postcode',         'keydown', e => { if (e.key === 'Enter') calculatePostage(); });
+  wire('success-continue-btn',   'click', resetShop);
+  wire('login-btn',              'click', attemptLogin);
+  wire('login-cancel-btn',       'click', closeLogin);
+  wire('admin-pw',               'keydown', e => { if (e.key === 'Enter') attemptLogin(); });
+  wire('pw-toggle-btn',          'click', () => {
     const input = el('admin-pw'); const btn = el('pw-toggle-btn');
     const show  = input.type === 'password';
     input.type = show ? 'text' : 'password';
     btn.textContent = show ? 'Hide' : 'Show';
     btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
   });
+  wire('admin-orders-btn',       'click', openOrders);
+  wire('admin-add-btn',          'click', openAddPanel);
+  wire('admin-logout-btn',       'click', adminLogout);
+  wire('orders-close-btn',       'click', closeOrders);
+  wire('artist-photo-upload-btn','click', () => el('artist-photo-file').click());
+  wire('artist-photo-file',      'change', handleArtistPhotoUpload);
+  wire('artist-photo-remove-btn','click', removeArtistPhoto);
+  wire('add-panel-close-btn',    'click', closeAddPanel);
+  wire('img-strip-add-btn',      'click', () => el('img-file').click());
+  wire('img-file',               'change', handleImgUpload);
+  wire('save-painting-btn',      'click', saveNewPainting);
+  wire('contact-form-btn',       'click', submitContactForm);
+  wire('confirm-cancel-btn',     'click', closeConfirm);
+  wire('confirm-delete-btn',     'click', executeDeletion);
+  wire('lightbox-close',         'click', closeLightbox);
+  wire('lightbox-prev',          'click', lightboxPrev);
+  wire('lightbox-next',          'click', lightboxNext);
+  wire('lightbox-overlay',       'click', e => { if (e.target === el('lightbox-overlay')) closeLightbox(); });
 
-  el('admin-orders-btn').addEventListener('click', openOrders);
-  el('admin-add-btn').addEventListener('click', openAddPanel);
-  el('admin-logout-btn').addEventListener('click', adminLogout);
-
-  el('orders-close-btn').addEventListener('click', closeOrders);
-
-  el('artist-photo-upload-btn').addEventListener('click', () => el('artist-photo-file').click());
-  el('artist-photo-file').addEventListener('change', handleArtistPhotoUpload);
-  el('artist-photo-remove-btn').addEventListener('click', removeArtistPhoto);
-
-  el('add-panel-close-btn').addEventListener('click', closeAddPanel);
-  el('img-strip-add-btn').addEventListener('click', () => el('img-file').click());
-  el('img-file').addEventListener('change', handleImgUpload);
-  el('save-painting-btn').addEventListener('click', saveNewPainting);
-
-  el('contact-form-btn').addEventListener('click', submitContactForm);
-
-  el('confirm-cancel-btn').addEventListener('click', closeConfirm);
-  el('confirm-delete-btn').addEventListener('click', executeDeletion);
-
-  el('lightbox-close').addEventListener('click', closeLightbox);
-  el('lightbox-prev').addEventListener('click', lightboxPrev);
-  el('lightbox-next').addEventListener('click', lightboxNext);
-  el('lightbox-overlay').addEventListener('click', e => { if (e.target === el('lightbox-overlay')) closeLightbox(); });
+  // Keyboard navigation for lightbox
   document.addEventListener('keydown', e => {
-    if (!el('lightbox-overlay').classList.contains('open')) return;
-    if (e.key === 'Escape')     closeLightbox();
-    if (e.key === 'ArrowRight') lightboxNext();
-    if (e.key === 'ArrowLeft')  lightboxPrev();
+    try {
+      if (!el('lightbox-overlay').classList.contains('open')) return;
+      if (e.key === 'Escape')     closeLightbox();
+      if (e.key === 'ArrowRight') lightboxNext();
+      if (e.key === 'ArrowLeft')  lightboxPrev();
+    } catch (err) { console.error('keydown handler failed:', err); }
   });
 
-  await loadArtworks();
-  renderGallery();
-  updateCartUI();
-  if (isLoggedIn()) activateAdminMode();
+  // ── Load gallery — isolated so event listeners always work ─────────────
+  // Even if the API call fails or renderGallery throws, all buttons
+  // and panels remain functional.
+  (async () => {
+    try {
+      await loadArtworks();
+    } catch (e) {
+      console.error('loadArtworks failed:', e);
+    }
+
+    try {
+      renderGallery();
+    } catch (e) {
+      console.error('renderGallery failed:', e);
+      // Last-resort fallback — show an error message in both grids
+      ['gallery-seascapes', 'gallery-figurative'].forEach(id => {
+        const grid = el(id);
+        if (grid) {
+          grid.innerHTML = '<p class="gallery-empty">Gallery could not be loaded. Please refresh the page.</p>';
+        }
+      });
+    }
+
+    try {
+      updateCartUI();
+    } catch (e) {
+      console.error('updateCartUI failed:', e);
+    }
+
+    try {
+      if (isLoggedIn()) activateAdminMode();
+    } catch (e) {
+      console.error('activateAdminMode failed:', e);
+    }
+  })();
 });
