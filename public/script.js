@@ -1,5 +1,97 @@
 'use strict';
 
+/* ─── IN-APP BROWSER DETECTION ───────────────────────────────────────────────
+ *
+ * Facebook Messenger, Instagram, and WhatsApp open links in their own
+ * stripped-down browser (WebView) rather than the device's real browser.
+ * These in-app browsers (IABs) have known issues with fetch(), sessionStorage,
+ * and strict CSP enforcement that prevent the gallery from rendering.
+ *
+ * Detection: Facebook/Meta IABs always include FBAN, FBAV, FB_IAB, FBIOS,
+ * or Instagram in the user agent string.
+ *
+ * Response: show a full-width banner at the top of the page immediately,
+ * before any API calls, asking the user to open in their real browser.
+ * On Android the intent:// URL scheme launches Chrome directly.
+ * On iOS we fall back to a copy-link approach since iOS blocks intent://.
+ */
+function detectAndHandleIAB() {
+  const ua = navigator.userAgent || '';
+  const isIAB = /FBAN|FBAV|FB_IAB|FBIOS|Instagram|WhatsApp|LinkedInApp/i.test(ua);
+  if (!isIAB) return;
+
+  // Inject the banner immediately — before DOMContentLoaded if possible,
+  // so it's the very first thing the user sees.
+  function showBanner() {
+    // Don't show twice
+    if (document.getElementById('iab-banner')) return;
+
+    const isAndroid = /android/i.test(ua);
+    const currentUrl = window.location.href;
+
+    const banner = document.createElement('div');
+    banner.id        = 'iab-banner';
+    banner.className = 'iab-banner';
+    banner.setAttribute('role', 'alert');
+
+    const message = document.createElement('p');
+    message.className   = 'iab-banner-msg';
+    message.textContent = 'For the best experience — including viewing all paintings — please open this site in your browser.';
+
+    const btnRow = document.createElement('div');
+    btnRow.className = 'iab-banner-btns';
+
+    if (isAndroid) {
+      // intent:// URL launches Chrome directly on Android
+      const intentUrl = 'intent://' + currentUrl.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end';
+      const openBtn = document.createElement('a');
+      openBtn.className   = 'iab-banner-btn iab-banner-btn-primary';
+      openBtn.textContent = 'Open in Chrome';
+      openBtn.href        = intentUrl;
+      btnRow.appendChild(openBtn);
+    } else {
+      // iOS: can't force open in Safari via intent, so offer a copy button
+      const copyBtn = document.createElement('button');
+      copyBtn.className   = 'iab-banner-btn iab-banner-btn-primary';
+      copyBtn.textContent = 'Copy link';
+      copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(currentUrl).then(() => {
+          copyBtn.textContent = 'Copied — paste in Safari';
+        }).catch(() => {
+          copyBtn.textContent = currentUrl; // fallback: show the URL itself
+        });
+      });
+      btnRow.appendChild(copyBtn);
+    }
+
+    const dismissBtn = document.createElement('button');
+    dismissBtn.className   = 'iab-banner-btn iab-banner-btn-dismiss';
+    dismissBtn.textContent = 'Continue anyway';
+    dismissBtn.addEventListener('click', () => {
+      banner.style.display = 'none';
+    });
+    btnRow.appendChild(dismissBtn);
+
+    banner.appendChild(message);
+    banner.appendChild(btnRow);
+
+    // Insert as the very first element in body
+    const body = document.body || document.documentElement;
+    body.insertBefore(banner, body.firstChild);
+  }
+
+  // Try immediately (script runs before DOMContentLoaded when not deferred)
+  if (document.body) {
+    showBanner();
+  } else {
+    // Fallback: wait for DOM
+    document.addEventListener('DOMContentLoaded', showBanner);
+  }
+}
+
+// Run detection immediately — not inside DOMContentLoaded
+detectAndHandleIAB();
+
 /* ─── SESSION ─────────────────────────────────────────────────────────────── */
 const SESSION_KEY = 'atelier_admin_token';
 
@@ -58,12 +150,6 @@ async function apiFetch(path, options = {}) {
 }
 
 /* ─── GALLERY ─────────────────────────────────────────────────────────────── */
-
-/**
- * Loads artworks from the API with a fallback to empty state.
- * Never throws — a failed load shows an empty gallery rather than
- * a broken page.
- */
 async function loadArtworks() {
   try {
     const data  = await apiFetch('/api/get-artworks');
@@ -72,8 +158,6 @@ async function loadArtworks() {
     renderArtistPhoto();
   } catch (e) {
     console.error('Failed to load artworks:', e);
-    // Keep whatever artworks we already have (e.g. from a previous
-    // successful load) rather than wiping them on a transient error.
     if (artworks.length === 0) artworks = [];
     artistPhoto = artistPhoto || null;
   }
@@ -140,12 +224,6 @@ async function removeArtistPhoto() {
 }
 
 /* ─── GALLERY CARDS ───────────────────────────────────────────────────────── */
-
-/**
- * Builds a single artwork card element.
- * Wrapped in try/catch so a malformed artwork record doesn't
- * prevent the rest of the gallery from rendering.
- */
 function buildCard(art) {
   try {
     const card = document.createElement('div');
@@ -159,8 +237,6 @@ function buildCard(art) {
     if (heroUrl) {
       const img = document.createElement('img');
       img.src = heroUrl; img.alt = art.title || '';
-      // onerror fallback — if the CDN image fails to load, show nothing
-      // rather than a broken image icon
       img.onerror = () => { img.style.display = 'none'; };
       imgWrap.appendChild(img);
     } else if (art.svg) {
@@ -211,17 +287,12 @@ function buildCard(art) {
     card.appendChild(imgWrap); card.appendChild(labelRow); card.appendChild(mediumEl);
     card.appendChild(addBtn);  card.appendChild(adminCtrl);
     return card;
-
   } catch (e) {
-    console.error('buildCard failed for artwork:', art?.id, e);
-    return null; // populateGrid skips null cards
+    console.error('buildCard failed for artwork:', art && art.id, e);
+    return null;
   }
 }
 
-/**
- * Populates a grid element with cards.
- * Skips any card that failed to build rather than throwing.
- */
 function populateGrid(gridEl, items) {
   if (!gridEl) return;
   gridEl.innerHTML = '';
@@ -245,10 +316,6 @@ function populateGrid(gridEl, items) {
   }
 }
 
-/**
- * Renders both gallery sections.
- * Wrapped in try/catch so a rendering error doesn't crash the page.
- */
 function renderGallery() {
   try {
     const seascapes  = artworks.filter(a => a && a.category === 'seascape');
@@ -496,7 +563,6 @@ async function saveNewPainting() {
   errEl.textContent = '';
   btn.disabled = true; btn.textContent = 'Saving…';
 
-  // Phase 1: create artwork record
   let newId;
   try {
     const data = await apiFetch('/api/paintings', {
@@ -509,11 +575,10 @@ async function saveNewPainting() {
     btn.disabled = false; btn.textContent = 'Save painting to gallery'; return;
   }
 
-  // Phase 2: upload images sequentially
   const total = newImgDataArray.length;
   const failedImages = [];
   for (let i = 0; i < total; i++) {
-    btn.textContent = `Uploading image ${i + 1} of ${total}…`;
+    btn.textContent = 'Uploading image ' + (i + 1) + ' of ' + total + '…';
     try {
       await apiFetch('/api/upload-image', {
         method: 'POST',
@@ -521,7 +586,7 @@ async function saveNewPainting() {
       });
     } catch (e) {
       failedImages.push({ index: i + 1, reason: e.message || 'Unknown error' });
-      console.error(`Image ${i + 1} upload failed:`, e);
+      console.error('Image ' + (i + 1) + ' upload failed:', e);
     }
   }
 
@@ -535,9 +600,9 @@ async function saveNewPainting() {
       if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 200);
   } else {
-    const failList = failedImages.map(f => `Image ${f.index}: ${f.reason}`).join('\n');
+    const failList = failedImages.map(f => 'Image ' + f.index + ': ' + f.reason).join('\n');
     errEl.textContent =
-      `Painting saved, but ${failedImages.length} image(s) failed to upload:\n${failList}\n` +
+      'Painting saved, but ' + failedImages.length + ' image(s) failed to upload:\n' + failList + '\n' +
       'The painting has been added to your gallery. You can delete and re-add it to retry the images.';
     btn.disabled = false; btn.textContent = 'Save painting to gallery';
   }
@@ -599,9 +664,7 @@ function updateCartUI() {
     });
 
     itemsEl.innerHTML = ''; itemsEl.appendChild(frag);
-  } catch (e) {
-    console.error('updateCartUI failed:', e);
-  }
+  } catch (e) { console.error('updateCartUI failed:', e); }
 }
 
 function openCart() {
@@ -683,7 +746,7 @@ async function renderOrders() {
   const body = el('orders-panel-body');
   body.innerHTML = '<div class="orders-loading">Loading orders…</div>';
   try {
-    const data   = await apiFetch('/api/get-orders');
+    const data   = await apiFetch('/api/get-artworks');
     const orders = data.orders || [];
     if (orders.length === 0) { body.innerHTML = '<div class="orders-empty">No orders yet.</div>'; return; }
 
@@ -767,8 +830,8 @@ async function calculatePostage() {
   if (itemsMissingDimensions.length > 0) {
     const names = itemsMissingDimensions.map(a => '"' + a.title + '"').join(', ');
     resultEl.innerHTML =
-      `<p class="postage-error">Shipping dimensions are not set for ${names}. ` +
-      `Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a postage quote.</p>`;
+      '<p class="postage-error">Shipping dimensions are not set for ' + names + '. ' +
+      'Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a postage quote.</p>';
     return;
   }
 
@@ -778,8 +841,8 @@ async function calculatePostage() {
   }));
 
   btn.disabled = true; btn.textContent = 'Calculating…';
-  const parcelWord = items.length === 1 ? 'parcel' : `${items.length} parcels`;
-  resultEl.innerHTML = `<p class="postage-loading">Fetching rates from Australia Post for ${parcelWord}…</p>`;
+  const parcelWord = items.length === 1 ? 'parcel' : (items.length + ' parcels');
+  resultEl.innerHTML = '<p class="postage-loading">Fetching rates from Australia Post for ' + parcelWord + '…</p>';
 
   try {
     const data = await apiFetch('/api/postage', {
@@ -792,8 +855,8 @@ async function calculatePostage() {
       const servicesWrap = document.createElement('div'); servicesWrap.className = 'postage-services';
       const note = document.createElement('p'); note.className = 'postage-note';
       note.textContent = items.length === 1
-        ? `Postage from Airlie Beach (4802) to ${postcode}. Select a service:`
-        : `Postage from Airlie Beach (4802) to ${postcode} — combined rate for ${items.length} parcels. Select a service:`;
+        ? 'Postage from Airlie Beach (4802) to ' + postcode + '. Select a service:'
+        : 'Postage from Airlie Beach (4802) to ' + postcode + ' — combined rate for ' + items.length + ' parcels. Select a service:';
       servicesWrap.appendChild(note);
 
       data.services.forEach((s, i) => {
@@ -818,12 +881,12 @@ async function calculatePostage() {
       const disclaimer = document.createElement('p'); disclaimer.className = 'postage-disclaimer';
       disclaimer.textContent = items.length === 1
         ? 'Selected postage will be added to your total. Michael will confirm and dispatch once payment is received.'
-        : `Combined postage for all ${items.length} works. Each will be carefully packaged and dispatched separately once payment is received.`;
+        : 'Combined postage for all ' + items.length + ' works. Each will be carefully packaged and dispatched separately once payment is received.';
       servicesWrap.appendChild(disclaimer);
       resultEl.innerHTML = ''; resultEl.appendChild(servicesWrap);
     } else {
       selectedPostage = null;
-      resultEl.innerHTML = `<p class="postage-error">${data.message || 'No postage options found. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a quote.'}</p>`;
+      resultEl.innerHTML = '<p class="postage-error">' + (data.message || 'No postage options found. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a quote.') + '</p>';
     }
   } catch (e) {
     resultEl.innerHTML = '<p class="postage-error">Could not calculate postage. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a shipping quote.</p>';
@@ -886,7 +949,8 @@ function validateForm() {
     ['address', 'Street address'], ['city', 'City'],
     ['state', 'State'], ['country', 'Country'],
   ];
-  for (const [id, label] of textFields) {
+  for (var i = 0; i < textFields.length; i++) {
+    var id = textFields[i][0]; var label = textFields[i][1];
     const val = fieldVal(id);
     if (!val) { showPaymentError('Please enter your ' + label + '.'); return null; }
     if (hasHtml(val)) { showPaymentError(label + ' must not contain HTML characters.'); return null; }
@@ -917,9 +981,9 @@ async function handlePayment() {
     if (result.status === 'OK') {
       await processPayment(result.token, fields);
     } else {
-      const code = result.errors?.[0]?.code || '';
+      const code = result.errors && result.errors[0] ? result.errors[0].code : '';
       showPaymentError(safeCardError(code));
-      await squareCard.clear?.();
+      if (squareCard.clear) await squareCard.clear();
       btn.disabled = false; btn.textContent = 'Complete Purchase';
     }
   } catch (e) {
@@ -947,7 +1011,7 @@ async function processPayment(sourceId, fields) {
         postageQuoteId: selectedPostage.quoteId,
       }),
     });
-    await squareCard.clear?.();
+    if (squareCard.clear) await squareCard.clear();
     await loadArtworks();
     cart = []; selectedPostage = null;
     updateCartUI(); showSuccess(data.orderId);
@@ -956,7 +1020,7 @@ async function processPayment(sourceId, fields) {
       ? e.message
       : 'Payment could not be processed. Please check your card details and try again.';
     showPaymentError(msg);
-    await squareCard.clear?.();
+    if (squareCard.clear) await squareCard.clear();
     const btn = el('pay-btn'); btn.disabled = false; btn.textContent = 'Complete Purchase';
   }
 }
@@ -979,7 +1043,7 @@ function isSafeServerMessage(msg) {
   if (!msg || typeof msg !== 'string') return false;
   return ['Too many payment attempts', 'already sold', 'Invalid or incomplete form data',
           'An unexpected error occurred', 'Payment could not be processed', 'Invalid postage']
-    .some(s => msg.includes(s));
+    .some(function(s) { return msg.indexOf(s) !== -1; });
 }
 
 function showSuccess(orderId) {
@@ -995,12 +1059,9 @@ function resetShop() {
 }
 
 /* ─── BOOT ────────────────────────────────────────────────────────────────── */
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', function() {
 
-  // ── Wire up all event listeners first ──────────────────────────────────
-  // Done in a try/catch per listener so one bad wire-up doesn't
-  // prevent the rest from attaching.
-  const wire = (id, event, fn) => {
+  const wire = function(id, event, fn) {
     try {
       const element = el(id);
       if (element) element.addEventListener(event, fn);
@@ -1009,19 +1070,19 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   wire('cart-toggle-btn',        'click', toggleCart);
-  wire('admin-nav-link',         'click', e => { e.preventDefault(); openLogin(); });
+  wire('admin-nav-link',         'click', function(e) { e.preventDefault(); openLogin(); });
   wire('cart-overlay',           'click', closeCart);
   wire('cart-close-btn',         'click', closeCart);
   wire('checkout-btn',           'click', openCheckout);
   wire('checkout-close-btn',     'click', closeCheckout);
   wire('pay-btn',                'click', handlePayment);
   wire('postage-calc-btn',       'click', calculatePostage);
-  wire('buyer-postcode',         'keydown', e => { if (e.key === 'Enter') calculatePostage(); });
+  wire('buyer-postcode',         'keydown', function(e) { if (e.key === 'Enter') calculatePostage(); });
   wire('success-continue-btn',   'click', resetShop);
   wire('login-btn',              'click', attemptLogin);
   wire('login-cancel-btn',       'click', closeLogin);
-  wire('admin-pw',               'keydown', e => { if (e.key === 'Enter') attemptLogin(); });
-  wire('pw-toggle-btn',          'click', () => {
+  wire('admin-pw',               'keydown', function(e) { if (e.key === 'Enter') attemptLogin(); });
+  wire('pw-toggle-btn',          'click', function() {
     const input = el('admin-pw'); const btn = el('pw-toggle-btn');
     const show  = input.type === 'password';
     input.type = show ? 'text' : 'password';
@@ -1032,11 +1093,11 @@ document.addEventListener('DOMContentLoaded', () => {
   wire('admin-add-btn',          'click', openAddPanel);
   wire('admin-logout-btn',       'click', adminLogout);
   wire('orders-close-btn',       'click', closeOrders);
-  wire('artist-photo-upload-btn','click', () => el('artist-photo-file').click());
+  wire('artist-photo-upload-btn','click', function() { el('artist-photo-file').click(); });
   wire('artist-photo-file',      'change', handleArtistPhotoUpload);
   wire('artist-photo-remove-btn','click', removeArtistPhoto);
   wire('add-panel-close-btn',    'click', closeAddPanel);
-  wire('img-strip-add-btn',      'click', () => el('img-file').click());
+  wire('img-strip-add-btn',      'click', function() { el('img-file').click(); });
   wire('img-file',               'change', handleImgUpload);
   wire('save-painting-btn',      'click', saveNewPainting);
   wire('contact-form-btn',       'click', submitContactForm);
@@ -1045,10 +1106,9 @@ document.addEventListener('DOMContentLoaded', () => {
   wire('lightbox-close',         'click', closeLightbox);
   wire('lightbox-prev',          'click', lightboxPrev);
   wire('lightbox-next',          'click', lightboxNext);
-  wire('lightbox-overlay',       'click', e => { if (e.target === el('lightbox-overlay')) closeLightbox(); });
+  wire('lightbox-overlay',       'click', function(e) { if (e.target === el('lightbox-overlay')) closeLightbox(); });
 
-  // Keyboard navigation for lightbox
-  document.addEventListener('keydown', e => {
+  document.addEventListener('keydown', function(e) {
     try {
       if (!el('lightbox-overlay').classList.contains('open')) return;
       if (e.key === 'Escape')     closeLightbox();
@@ -1057,39 +1117,22 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) { console.error('keydown handler failed:', err); }
   });
 
-  // ── Load gallery — isolated so event listeners always work ─────────────
-  // Even if the API call fails or renderGallery throws, all buttons
-  // and panels remain functional.
-  (async () => {
-    try {
-      await loadArtworks();
-    } catch (e) {
-      console.error('loadArtworks failed:', e);
-    }
-
-    try {
-      renderGallery();
-    } catch (e) {
-      console.error('renderGallery failed:', e);
-      // Last-resort fallback — show an error message in both grids
-      ['gallery-seascapes', 'gallery-figurative'].forEach(id => {
-        const grid = el(id);
-        if (grid) {
-          grid.innerHTML = '<p class="gallery-empty">Gallery could not be loaded. Please refresh the page.</p>';
+  (function() {
+    function run() {
+      loadArtworks().then(function() {
+        try { renderGallery(); } catch(e) {
+          console.error('renderGallery failed:', e);
+          ['gallery-seascapes', 'gallery-figurative'].forEach(function(id) {
+            const grid = el(id);
+            if (grid) grid.innerHTML = '<p class="gallery-empty">Gallery could not be loaded. Please refresh the page.</p>';
+          });
         }
+        try { updateCartUI(); } catch(e) { console.error('updateCartUI failed:', e); }
+        try { if (isLoggedIn()) activateAdminMode(); } catch(e) { console.error('activateAdminMode failed:', e); }
+      }).catch(function(e) {
+        console.error('loadArtworks failed:', e);
       });
     }
-
-    try {
-      updateCartUI();
-    } catch (e) {
-      console.error('updateCartUI failed:', e);
-    }
-
-    try {
-      if (isLoggedIn()) activateAdminMode();
-    } catch (e) {
-      console.error('activateAdminMode failed:', e);
-    }
+    try { run(); } catch(e) { console.error('Boot failed:', e); }
   })();
 });

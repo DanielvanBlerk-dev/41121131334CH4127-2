@@ -815,6 +815,61 @@ footer {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   IN-APP BROWSER BANNER
+   Shown when the site is opened inside Facebook Messenger, Instagram,
+   or WhatsApp. Prompts the user to open in their real browser.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.iab-banner {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 9999;
+  background: var(--ink);
+  color: var(--warm-white);
+  padding: 1rem 1.25rem;
+  text-align: center;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+}
+.iab-banner-msg {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(255,255,255,0.85);
+  margin-bottom: 0.75rem;
+  letter-spacing: 0.03em;
+}
+.iab-banner-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.iab-banner-btn {
+  display: inline-block;
+  padding: 9px 20px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  border: none;
+  transition: background 0.2s, color 0.2s;
+  white-space: nowrap;
+}
+.iab-banner-btn-primary {
+  background: var(--gold);
+  color: #fff;
+}
+.iab-banner-btn-primary:hover { background: var(--gold-light); }
+.iab-banner-btn-dismiss {
+  background: none;
+  color: rgba(255,255,255,0.5);
+  border: 1px solid rgba(255,255,255,0.2);
+}
+.iab-banner-btn-dismiss:hover { color: #fff; border-color: rgba(255,255,255,0.5); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
    NEW STYLES — multi-image upload strip + lightbox
    ═══════════════════════════════════════════════════════════════════════════ */
 
