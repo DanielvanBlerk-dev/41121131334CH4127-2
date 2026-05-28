@@ -17,7 +17,7 @@
  */
 function detectAndHandleIAB() {
   const ua = navigator.userAgent || '';
-  const isIAB = /FBAN|FBAV|FB_IAB|FBIOS|Instagram|WhatsApp|LinkedInApp/i.test(ua);
+  const isIAB = /FBAN|FBAV|FB_IAB|Orca-Android|FBIOS|Instagram|WhatsApp|LinkedInApp/i.test(ua);
   if (!isIAB) return;
 
   // Inject the banner immediately — before DOMContentLoaded if possible,
