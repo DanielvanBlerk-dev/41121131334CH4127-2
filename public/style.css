@@ -260,6 +260,21 @@ nav {
 .add-btn:hover:not(:disabled) { background: var(--ink); color: var(--warm-white); border-color: var(--ink); }
 .add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .add-btn.added { background: var(--accent); color: var(--warm-white); border-color: var(--accent); }
+
+/* Oversized painting — replaces the add-to-cart button */
+.contact-artist-btn {
+  margin-top: 12px; width: 100%;
+  background: none; border: 1px solid var(--gold);
+  padding: 10px; cursor: pointer;
+  font-family: 'DM Mono', monospace; font-size: 10px;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--gold); text-decoration: none;
+  display: block; text-align: center;
+  transition: all 0.25s;
+}
+.contact-artist-btn:hover {
+  background: var(--gold); color: #fff;
+}
 .admin-controls { display: none; margin-top: 8px; gap: 6px; }
 .admin-controls.visible { display: flex; }
 .admin-ctrl-btn {
@@ -622,6 +637,22 @@ footer {
 .shipping-subhead {
   margin-top: 1.5rem; margin-bottom: 1rem;
   border-bottom-color: var(--border);
+}
+
+/* Shipping dimensions wrapper — hidden when oversized is checked */
+.shipping-dimensions {
+  margin-top: 0.5rem;
+  transition: opacity 0.2s;
+}
+.shipping-dimensions.hidden {
+  display: none;
+}
+.shipping-dimensions-label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.75rem;
 }
 
 /* ─── POSTAGE SELECTABLE ROWS ─────────────────────────────────────────────── */

@@ -2,17 +2,9 @@
 
 /* ─── BROWSER COMPATIBILITY BANNER ───────────────────────────────────────────
  *
- * Some in-app browsers (Facebook Messenger, Instagram, WhatsApp) block
- * fetch() calls, causing the gallery to silently fail.
- *
- * TWO triggers for the banner:
- *
- * 1. UA detection (immediate) — catches known IAB strings on load.
- *    We check broadly since Meta changes their UA strings frequently.
- *
- * 2. Gallery failure detection (after load) — if artworks is still empty
- *    after the API call completes, show the banner regardless of UA.
- *    This catches any browser we haven't anticipated.
+ * Shows when the gallery fails to load — catches any browser that blocks
+ * the fetch() call (e.g. some in-app browsers).
+ * Only triggers if artworks is empty after the API call completes.
  */
 
 function showIABBanner() {
@@ -35,7 +27,6 @@ function showIABBanner() {
   btnRow.className = 'iab-banner-btns';
 
   if (isAndroid) {
-    // intent:// URL launches Chrome directly on Android — no copy/paste needed
     var intentUrl = 'intent://' + currentUrl.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end';
     var openBtn   = document.createElement('a');
     openBtn.className   = 'iab-banner-btn iab-banner-btn-primary';
@@ -71,8 +62,7 @@ function showIABBanner() {
   body.insertBefore(banner, body.firstChild);
 }
 
-// Banner only shows when the gallery actually fails to load —
-// not based on user agent detection, which produces false positives.
+// Banner only shows when gallery actually fails to load.
 // showIABBanner() is called from loadArtworks() if artworks is empty.
 
 /* ─── SESSION ─────────────────────────────────────────────────────────────── */
@@ -145,9 +135,7 @@ async function loadArtworks() {
     artistPhoto = artistPhoto || null;
   }
 
-  // Trigger 2: gallery-failure detection.
-  // If artworks is still empty after the API call, something blocked the
-  // fetch — show the banner regardless of what browser we think we're in.
+  // Gallery-failure detection — show banner if nothing loaded
   if (artworks.length === 0) {
     showIABBanner();
   }
@@ -214,6 +202,15 @@ async function removeArtistPhoto() {
 }
 
 /* ─── GALLERY CARDS ───────────────────────────────────────────────────────── */
+
+/**
+ * Builds a single artwork card.
+ *
+ * Oversized paintings:
+ *   - Show a gold "Contact Artist" link instead of the add-to-cart button
+ *   - Cannot be added to the cart
+ *   - No sold overlay (they're never "sold" through the site)
+ */
 function buildCard(art) {
   try {
     const card = document.createElement('div');
@@ -242,7 +239,8 @@ function buildCard(art) {
       imgWrap.appendChild(badge);
     }
 
-    if (art.sold) {
+    // Sold overlay — only for non-oversized paintings
+    if (art.sold && !art.oversized) {
       const overlay = document.createElement('div');
       overlay.className = 'sold-overlay'; overlay.textContent = 'Sold';
       imgWrap.appendChild(overlay);
@@ -255,18 +253,32 @@ function buildCard(art) {
 
     const mediumEl = document.createElement('div'); mediumEl.className = 'artwork-medium'; mediumEl.textContent = art.medium || '';
 
-    const addBtn = document.createElement('button');
-    addBtn.className   = 'add-btn' + (inCart(art.id) ? ' added' : '');
-    addBtn.disabled    = art.sold || inCart(art.id);
-    addBtn.textContent = art.sold ? 'Sold' : inCart(art.id) ? 'In your selection' : '+ Add to selection';
-    addBtn.addEventListener('click', () => addToCart(art.id));
+    // ── Action button — differs for oversized vs standard ────────────────
+    let actionEl;
+    if (art.oversized) {
+      // Oversized: gold "Contact Artist" link, scrolls to contact section
+      actionEl = document.createElement('a');
+      actionEl.className   = 'contact-artist-btn';
+      actionEl.href        = '#contact';
+      actionEl.textContent = 'Contact Artist — freight quote required';
+    } else {
+      // Standard: add to cart button
+      actionEl = document.createElement('button');
+      actionEl.className   = 'add-btn' + (inCart(art.id) ? ' added' : '');
+      actionEl.disabled    = art.sold || inCart(art.id);
+      actionEl.textContent = art.sold ? 'Sold' : inCart(art.id) ? 'In your selection' : '+ Add to selection';
+      actionEl.addEventListener('click', () => addToCart(art.id));
+    }
 
+    // ── Admin controls ───────────────────────────────────────────────────
     const adminCtrl = document.createElement('div');
     adminCtrl.className = 'admin-controls' + (isAdmin ? ' visible' : '');
 
     const soldBtn = document.createElement('button');
     soldBtn.className = 'admin-ctrl-btn sold-toggle';
     soldBtn.textContent = art.sold ? 'Mark available' : 'Mark sold';
+    // Disable sold toggle for oversized paintings — they're not sold through the site
+    soldBtn.disabled = !!art.oversized;
     soldBtn.addEventListener('click', () => toggleSold(art.id));
 
     const delBtn = document.createElement('button');
@@ -274,9 +286,11 @@ function buildCard(art) {
     delBtn.addEventListener('click', () => confirmDelete(art.id, art.title));
 
     adminCtrl.appendChild(soldBtn); adminCtrl.appendChild(delBtn);
+
     card.appendChild(imgWrap); card.appendChild(labelRow); card.appendChild(mediumEl);
-    card.appendChild(addBtn);  card.appendChild(adminCtrl);
+    card.appendChild(actionEl); card.appendChild(adminCtrl);
     return card;
+
   } catch (e) {
     console.error('buildCard failed for artwork:', art && art.id, e);
     return null;
@@ -493,14 +507,36 @@ function renderImgStrip() {
   addWrap.style.display = newImgDataArray.length >= 10 ? 'none' : '';
 }
 
+/**
+ * Toggles the shipping dimensions section based on the oversized checkbox.
+ * Called on checkbox change and on panel open/reset.
+ */
+function updateOversizedToggle() {
+  const oversized  = el('new-oversized');
+  const dimensions = el('shipping-dimensions');
+  if (!oversized || !dimensions) return;
+  dimensions.classList.toggle('hidden', oversized.checked);
+}
+
 function openAddPanel() {
   el('add-panel').classList.add('open');
   document.body.style.overflow = 'hidden';
+
+  // Reset all fields
   ['new-title', 'new-medium', 'new-price',
-   'new-weight', 'new-length', 'new-width', 'new-height'].forEach(id => el(id).value = '');
+   'new-weight', 'new-length', 'new-width', 'new-height'].forEach(id => {
+    const field = el(id);
+    if (field) field.value = '';
+  });
   el('new-category').value    = 'seascape';
   el('new-sold').checked      = false;
+  el('new-oversized').checked = false;
   el('add-error').textContent = '';
+
+  // Reset oversized toggle to show dimensions by default
+  updateOversizedToggle();
+
+  // Reset image state
   newImgDataArray = []; renderImgStrip(); el('img-file').value = '';
 }
 
@@ -529,42 +565,51 @@ function handleImgUpload(e) {
 }
 
 async function saveNewPainting() {
-  const title    = el('new-title').value.trim();
-  const medium   = el('new-medium').value.trim();
-  const priceRaw = el('new-price').value;
-  const category = el('new-category').value;
-  const sold     = el('new-sold').checked;
-  const weight   = parseFloat(el('new-weight').value);
-  const length   = parseFloat(el('new-length').value);
-  const width    = parseFloat(el('new-width').value);
-  const height   = parseFloat(el('new-height').value);
-  const errEl    = el('add-error');
-  const btn      = el('save-painting-btn');
+  const title     = el('new-title').value.trim();
+  const medium    = el('new-medium').value.trim();
+  const priceRaw  = el('new-price').value;
+  const category  = el('new-category').value;
+  const sold      = el('new-sold').checked;
+  const oversized = el('new-oversized').checked;
+  const errEl     = el('add-error');
+  const btn       = el('save-painting-btn');
 
+  // ── Validate text fields ────────────────────────────────────────────
   if (!title)  { errEl.textContent = 'Please enter a title.'; return; }
   if (!medium) { errEl.textContent = 'Please enter the medium and dimensions.'; return; }
   const price = parseInt(priceRaw, 10);
   if (!priceRaw || isNaN(price) || price < 0) { errEl.textContent = 'Please enter a valid price.'; return; }
-  if (isNaN(weight) || weight <= 0) { errEl.textContent = 'Please enter the packed weight in kg.'; return; }
-  if (isNaN(length) || length <= 0) { errEl.textContent = 'Please enter the packed length in cm.'; return; }
-  if (isNaN(width)  || width  <= 0) { errEl.textContent = 'Please enter the packed width in cm.'; return; }
-  if (isNaN(height) || height <= 0) { errEl.textContent = 'Please enter the packed height in cm.'; return; }
+
+  // ── Validate shipping dimensions — only if not oversized ────────────
+  let weight, length, width, height;
+  if (!oversized) {
+    weight = parseFloat(el('new-weight').value);
+    length = parseFloat(el('new-length').value);
+    width  = parseFloat(el('new-width').value);
+    height = parseFloat(el('new-height').value);
+    if (isNaN(weight) || weight <= 0) { errEl.textContent = 'Please enter the packed weight in kg.'; return; }
+    if (isNaN(length) || length <= 0) { errEl.textContent = 'Please enter the packed length in cm.'; return; }
+    if (isNaN(width)  || width  <= 0) { errEl.textContent = 'Please enter the packed width in cm.'; return; }
+    if (isNaN(height) || height <= 0) { errEl.textContent = 'Please enter the packed height in cm.'; return; }
+  }
 
   errEl.textContent = '';
   btn.disabled = true; btn.textContent = 'Saving…';
 
+  // Phase 1: create artwork record
   let newId;
   try {
-    const data = await apiFetch('/api/paintings', {
-      method: 'POST',
-      body:   JSON.stringify({ title, medium, price, category, sold, weight, length, width, height }),
-    });
+    const body = { title, medium, price, category, sold, oversized };
+    if (!oversized) { body.weight = weight; body.length = length; body.width = width; body.height = height; }
+
+    const data = await apiFetch('/api/paintings', { method: 'POST', body: JSON.stringify(body) });
     newId = data.id;
   } catch (e) {
     errEl.textContent = e.message || 'Failed to save painting. Please try again.';
     btn.disabled = false; btn.textContent = 'Save painting to gallery'; return;
   }
 
+  // Phase 2: upload images sequentially
   const total = newImgDataArray.length;
   const failedImages = [];
   for (let i = 0; i < total; i++) {
@@ -601,7 +646,8 @@ async function saveNewPainting() {
 /* ─── CART ────────────────────────────────────────────────────────────────── */
 function addToCart(id) {
   const art = artworks.find(a => a.id === id);
-  if (!art || art.sold || inCart(id)) return;
+  // Oversized paintings cannot be added to cart — defensive check
+  if (!art || art.sold || art.oversized || inCart(id)) return;
   cart.push(art); updateCartUI(); renderGallery(); openCart();
 }
 function removeFromCart(id) {
@@ -736,7 +782,7 @@ async function renderOrders() {
   const body = el('orders-panel-body');
   body.innerHTML = '<div class="orders-loading">Loading orders…</div>';
   try {
-    const data   = await apiFetch('/api/get-artworks');
+    const data   = await apiFetch('/api/get-orders');
     const orders = data.orders || [];
     if (orders.length === 0) { body.innerHTML = '<div class="orders-empty">No orders yet.</div>'; return; }
 
@@ -1097,6 +1143,9 @@ document.addEventListener('DOMContentLoaded', function() {
   wire('lightbox-prev',          'click', lightboxPrev);
   wire('lightbox-next',          'click', lightboxNext);
   wire('lightbox-overlay',       'click', function(e) { if (e.target === el('lightbox-overlay')) closeLightbox(); });
+
+  // Oversized checkbox — toggles shipping dimensions visibility
+  wire('new-oversized', 'change', updateOversizedToggle);
 
   document.addEventListener('keydown', function(e) {
     try {
