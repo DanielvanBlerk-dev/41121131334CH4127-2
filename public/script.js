@@ -71,20 +71,9 @@ function showIABBanner() {
   body.insertBefore(banner, body.firstChild);
 }
 
-// Trigger 1: UA-based detection — broad regex covering all known Meta IAB variants
-(function() {
-  var ua = navigator.userAgent || '';
-  // Covers: FBAN (iOS Messenger), FB_IAB/MESSENGER (Android older),
-  // FB_IAB/Orca-Android (Android newer), FBIOS, Instagram, WhatsApp
-  // Also catches the generic 'wv' WebView marker combined with known FB patterns
-  var isKnownIAB = /FBAN|FBAV|FB_IAB|Orca-Android|FBIOS|Instagram|WhatsApp|LinkedInApp/i.test(ua);
-  if (!isKnownIAB) return;
-  if (document.body) {
-    showIABBanner();
-  } else {
-    document.addEventListener('DOMContentLoaded', showIABBanner);
-  }
-})();
+// Banner only shows when the gallery actually fails to load —
+// not based on user agent detection, which produces false positives.
+// showIABBanner() is called from loadArtworks() if artworks is empty.
 
 /* ─── SESSION ─────────────────────────────────────────────────────────────── */
 const SESSION_KEY = 'atelier_admin_token';
