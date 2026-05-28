@@ -1,96 +1,90 @@
 'use strict';
 
-/* ─── IN-APP BROWSER DETECTION ───────────────────────────────────────────────
+/* ─── BROWSER COMPATIBILITY BANNER ───────────────────────────────────────────
  *
- * Facebook Messenger, Instagram, and WhatsApp open links in their own
- * stripped-down browser (WebView) rather than the device's real browser.
- * These in-app browsers (IABs) have known issues with fetch(), sessionStorage,
- * and strict CSP enforcement that prevent the gallery from rendering.
+ * Some in-app browsers (Facebook Messenger, Instagram, WhatsApp) block
+ * fetch() calls, causing the gallery to silently fail.
  *
- * Detection: Facebook/Meta IABs always include FBAN, FBAV, FB_IAB, FBIOS,
- * or Instagram in the user agent string.
+ * TWO triggers for the banner:
  *
- * Response: show a full-width banner at the top of the page immediately,
- * before any API calls, asking the user to open in their real browser.
- * On Android the intent:// URL scheme launches Chrome directly.
- * On iOS we fall back to a copy-link approach since iOS blocks intent://.
+ * 1. UA detection (immediate) — catches known IAB strings on load.
+ *    We check broadly since Meta changes their UA strings frequently.
+ *
+ * 2. Gallery failure detection (after load) — if artworks is still empty
+ *    after the API call completes, show the banner regardless of UA.
+ *    This catches any browser we haven't anticipated.
  */
-function detectAndHandleIAB() {
-  const ua = navigator.userAgent || '';
-  const isIAB = /FBAN|FBAV|FB_IAB|Orca-Android|FBIOS|Instagram|WhatsApp|LinkedInApp/i.test(ua);
-  if (!isIAB) return;
 
-  // Inject the banner immediately — before DOMContentLoaded if possible,
-  // so it's the very first thing the user sees.
-  function showBanner() {
-    // Don't show twice
-    if (document.getElementById('iab-banner')) return;
+function showIABBanner() {
+  if (document.getElementById('iab-banner')) return;
 
-    const isAndroid = /android/i.test(ua);
-    const currentUrl = window.location.href;
+  var ua         = navigator.userAgent || '';
+  var isAndroid  = /android/i.test(ua);
+  var currentUrl = window.location.href;
 
-    const banner = document.createElement('div');
-    banner.id        = 'iab-banner';
-    banner.className = 'iab-banner';
-    banner.setAttribute('role', 'alert');
+  var banner = document.createElement('div');
+  banner.id        = 'iab-banner';
+  banner.className = 'iab-banner';
+  banner.setAttribute('role', 'alert');
 
-    const message = document.createElement('p');
-    message.className   = 'iab-banner-msg';
-    message.textContent = 'For the best experience — including viewing all paintings — please open this site in your browser.';
+  var message = document.createElement('p');
+  message.className   = 'iab-banner-msg';
+  message.textContent = 'Paintings are not displaying in this browser. For the full experience, please open this page in Chrome or Safari.';
 
-    const btnRow = document.createElement('div');
-    btnRow.className = 'iab-banner-btns';
+  var btnRow = document.createElement('div');
+  btnRow.className = 'iab-banner-btns';
 
-    if (isAndroid) {
-      // intent:// URL launches Chrome directly on Android
-      const intentUrl = 'intent://' + currentUrl.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end';
-      const openBtn = document.createElement('a');
-      openBtn.className   = 'iab-banner-btn iab-banner-btn-primary';
-      openBtn.textContent = 'Open in Chrome';
-      openBtn.href        = intentUrl;
-      btnRow.appendChild(openBtn);
-    } else {
-      // iOS: can't force open in Safari via intent, so offer a copy button
-      const copyBtn = document.createElement('button');
-      copyBtn.className   = 'iab-banner-btn iab-banner-btn-primary';
-      copyBtn.textContent = 'Copy link';
-      copyBtn.addEventListener('click', () => {
-        navigator.clipboard.writeText(currentUrl).then(() => {
-          copyBtn.textContent = 'Copied — paste in Safari';
-        }).catch(() => {
-          copyBtn.textContent = currentUrl; // fallback: show the URL itself
-        });
-      });
-      btnRow.appendChild(copyBtn);
-    }
-
-    const dismissBtn = document.createElement('button');
-    dismissBtn.className   = 'iab-banner-btn iab-banner-btn-dismiss';
-    dismissBtn.textContent = 'Continue anyway';
-    dismissBtn.addEventListener('click', () => {
-      banner.style.display = 'none';
-    });
-    btnRow.appendChild(dismissBtn);
-
-    banner.appendChild(message);
-    banner.appendChild(btnRow);
-
-    // Insert as the very first element in body
-    const body = document.body || document.documentElement;
-    body.insertBefore(banner, body.firstChild);
-  }
-
-  // Try immediately (script runs before DOMContentLoaded when not deferred)
-  if (document.body) {
-    showBanner();
+  if (isAndroid) {
+    // intent:// URL launches Chrome directly on Android — no copy/paste needed
+    var intentUrl = 'intent://' + currentUrl.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end';
+    var openBtn   = document.createElement('a');
+    openBtn.className   = 'iab-banner-btn iab-banner-btn-primary';
+    openBtn.textContent = 'Open in Chrome';
+    openBtn.href        = intentUrl;
+    btnRow.appendChild(openBtn);
   } else {
-    // Fallback: wait for DOM
-    document.addEventListener('DOMContentLoaded', showBanner);
+    var copyBtn = document.createElement('button');
+    copyBtn.className   = 'iab-banner-btn iab-banner-btn-primary';
+    copyBtn.textContent = 'Copy link — open in Safari';
+    copyBtn.addEventListener('click', function() {
+      try {
+        navigator.clipboard.writeText(currentUrl).then(function() {
+          copyBtn.textContent = 'Copied! Now paste in Safari';
+        });
+      } catch (e) {
+        copyBtn.textContent = currentUrl;
+      }
+    });
+    btnRow.appendChild(copyBtn);
   }
+
+  var dismissBtn = document.createElement('button');
+  dismissBtn.className   = 'iab-banner-btn iab-banner-btn-dismiss';
+  dismissBtn.textContent = 'Dismiss';
+  dismissBtn.addEventListener('click', function() { banner.style.display = 'none'; });
+  btnRow.appendChild(dismissBtn);
+
+  banner.appendChild(message);
+  banner.appendChild(btnRow);
+
+  var body = document.body || document.documentElement;
+  body.insertBefore(banner, body.firstChild);
 }
 
-// Run detection immediately — not inside DOMContentLoaded
-detectAndHandleIAB();
+// Trigger 1: UA-based detection — broad regex covering all known Meta IAB variants
+(function() {
+  var ua = navigator.userAgent || '';
+  // Covers: FBAN (iOS Messenger), FB_IAB/MESSENGER (Android older),
+  // FB_IAB/Orca-Android (Android newer), FBIOS, Instagram, WhatsApp
+  // Also catches the generic 'wv' WebView marker combined with known FB patterns
+  var isKnownIAB = /FBAN|FBAV|FB_IAB|Orca-Android|FBIOS|Instagram|WhatsApp|LinkedInApp/i.test(ua);
+  if (!isKnownIAB) return;
+  if (document.body) {
+    showIABBanner();
+  } else {
+    document.addEventListener('DOMContentLoaded', showIABBanner);
+  }
+})();
 
 /* ─── SESSION ─────────────────────────────────────────────────────────────── */
 const SESSION_KEY = 'atelier_admin_token';
@@ -160,6 +154,13 @@ async function loadArtworks() {
     console.error('Failed to load artworks:', e);
     if (artworks.length === 0) artworks = [];
     artistPhoto = artistPhoto || null;
+  }
+
+  // Trigger 2: gallery-failure detection.
+  // If artworks is still empty after the API call, something blocked the
+  // fetch — show the banner regardless of what browser we think we're in.
+  if (artworks.length === 0) {
+    showIABBanner();
   }
 }
 
