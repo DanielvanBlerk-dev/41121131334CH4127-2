@@ -256,13 +256,11 @@ function buildCard(art) {
     // ── Action button — differs for oversized vs standard ────────────────
     let actionEl;
     if (art.oversized) {
-      // Oversized: gold "Contact Artist" link, scrolls to contact section
       actionEl = document.createElement('a');
       actionEl.className   = 'contact-artist-btn';
       actionEl.href        = '#contact';
       actionEl.textContent = 'Contact Artist — freight quote required';
     } else {
-      // Standard: add to cart button
       actionEl = document.createElement('button');
       actionEl.className   = 'add-btn' + (inCart(art.id) ? ' added' : '');
       actionEl.disabled    = art.sold || inCart(art.id);
@@ -277,7 +275,6 @@ function buildCard(art) {
     const soldBtn = document.createElement('button');
     soldBtn.className = 'admin-ctrl-btn sold-toggle';
     soldBtn.textContent = art.sold ? 'Mark available' : 'Mark sold';
-    // Disable sold toggle for oversized paintings — they're not sold through the site
     soldBtn.disabled = !!art.oversized;
     soldBtn.addEventListener('click', () => toggleSold(art.id));
 
@@ -507,10 +504,6 @@ function renderImgStrip() {
   addWrap.style.display = newImgDataArray.length >= 10 ? 'none' : '';
 }
 
-/**
- * Toggles the shipping dimensions section based on the oversized checkbox.
- * Called on checkbox change and on panel open/reset.
- */
 function updateOversizedToggle() {
   const oversized  = el('new-oversized');
   const dimensions = el('shipping-dimensions');
@@ -522,7 +515,6 @@ function openAddPanel() {
   el('add-panel').classList.add('open');
   document.body.style.overflow = 'hidden';
 
-  // Reset all fields
   ['new-title', 'new-medium', 'new-price',
    'new-weight', 'new-length', 'new-width', 'new-height'].forEach(id => {
     const field = el(id);
@@ -533,10 +525,8 @@ function openAddPanel() {
   el('new-oversized').checked = false;
   el('add-error').textContent = '';
 
-  // Reset oversized toggle to show dimensions by default
   updateOversizedToggle();
 
-  // Reset image state
   newImgDataArray = []; renderImgStrip(); el('img-file').value = '';
 }
 
@@ -574,13 +564,11 @@ async function saveNewPainting() {
   const errEl     = el('add-error');
   const btn       = el('save-painting-btn');
 
-  // ── Validate text fields ────────────────────────────────────────────
   if (!title)  { errEl.textContent = 'Please enter a title.'; return; }
   if (!medium) { errEl.textContent = 'Please enter the medium and dimensions.'; return; }
   const price = parseInt(priceRaw, 10);
   if (!priceRaw || isNaN(price) || price < 0) { errEl.textContent = 'Please enter a valid price.'; return; }
 
-  // ── Validate shipping dimensions — only if not oversized ────────────
   let weight, length, width, height;
   if (!oversized) {
     weight = parseFloat(el('new-weight').value);
@@ -596,7 +584,6 @@ async function saveNewPainting() {
   errEl.textContent = '';
   btn.disabled = true; btn.textContent = 'Saving…';
 
-  // Phase 1: create artwork record
   let newId;
   try {
     const body = { title, medium, price, category, sold, oversized };
@@ -609,7 +596,6 @@ async function saveNewPainting() {
     btn.disabled = false; btn.textContent = 'Save painting to gallery'; return;
   }
 
-  // Phase 2: upload images sequentially
   const total = newImgDataArray.length;
   const failedImages = [];
   for (let i = 0; i < total; i++) {
@@ -646,7 +632,6 @@ async function saveNewPainting() {
 /* ─── CART ────────────────────────────────────────────────────────────────── */
 function addToCart(id) {
   const art = artworks.find(a => a.id === id);
-  // Oversized paintings cannot be added to cart — defensive check
   if (!art || art.sold || art.oversized || inCart(id)) return;
   cart.push(art); updateCartUI(); renderGallery(); openCart();
 }
@@ -757,6 +742,7 @@ async function openCheckout() {
   el('checkout-modal').classList.add('open');
   el('checkout-body').style.display = 'block';
   el('success-state').style.display = 'none';
+  updatePostageSectionForCountry();
   if (!squareCard) await initSquare();
 }
 function closeCheckout() {
@@ -853,13 +839,60 @@ async function renderOrders() {
 }
 
 /* ─── POSTAGE ─────────────────────────────────────────────────────────────── */
+
+/**
+ * Returns the currently selected destination country's ISO2 code and
+ * display name from the country dropdown. Defaults to AU if not found.
+ */
+function getSelectedCountry() {
+  const select = el('country');
+  if (!select) return { code: 'AU', name: 'Australia' };
+  const opt = select.options[select.selectedIndex];
+  return { code: select.value || 'AU', name: opt ? opt.text : 'Australia' };
+}
+
+/**
+ * Shows/hides the postcode input in the postage section based on the
+ * selected destination country. AusPost's international PAC API quotes
+ * by country + weight only — no postcode is used or required for
+ * international destinations.
+ *
+ * Called when the country dropdown changes, and once when checkout opens
+ * so the section reflects whatever was already selected.
+ */
+function updatePostageSectionForCountry() {
+  const { code, name } = getSelectedCountry();
+  const isIntl = code !== 'AU';
+
+  const postcodeGroup = el('postage-postcode-group');
+  const intro         = el('postage-intro');
+  if (postcodeGroup) postcodeGroup.style.display = isIntl ? 'none' : '';
+  if (intro) {
+    intro.textContent = isIntl
+      ? 'Postage to ' + name + ' will be calculated based on Australia Post international rates. Click Calculate to see options.'
+      : 'Enter your postcode to calculate shipping from Airlie Beach, then select a postage option to continue.';
+  }
+
+  // Clear any previous quote — the destination has changed
+  selectedPostage = null;
+  const resultEl = el('postage-result');
+  if (resultEl) resultEl.innerHTML = '';
+  updateOrderSummary();
+}
+
 async function calculatePostage() {
-  const postcode = el('buyer-postcode').value.trim();
+  const { code: countryCode, name: countryName } = getSelectedCountry();
+  const isIntl   = countryCode !== 'AU';
   const resultEl = el('postage-result');
   const btn      = el('postage-calc-btn');
 
-  if (!postcode || !/^[0-9]{4}$/.test(postcode)) {
-    resultEl.innerHTML = '<p class="postage-error">Please enter a valid 4-digit postcode.</p>'; return;
+  // ── Domestic: postcode required ─────────────────────────────────────
+  let postcode = '';
+  if (!isIntl) {
+    postcode = el('buyer-postcode').value.trim();
+    if (!postcode || !/^[0-9]{4}$/.test(postcode)) {
+      resultEl.innerHTML = '<p class="postage-error">Please enter a valid 4-digit postcode.</p>'; return;
+    }
   }
 
   const itemsMissingDimensions = cart.filter(a => !a.shipping || !a.shipping.weight || a.shipping.weight <= 0);
@@ -878,21 +911,27 @@ async function calculatePostage() {
 
   btn.disabled = true; btn.textContent = 'Calculating…';
   const parcelWord = items.length === 1 ? 'parcel' : (items.length + ' parcels');
-  resultEl.innerHTML = '<p class="postage-loading">Fetching rates from Australia Post for ' + parcelWord + '…</p>';
+  resultEl.innerHTML = '<p class="postage-loading">Fetching ' + (isIntl ? 'international ' : '') + 'rates from Australia Post for ' + parcelWord + '…</p>';
 
   try {
+    const requestBody = isIntl
+      ? { toCountry: countryCode, items }
+      : { toPostcode: postcode, items };
+
     const data = await apiFetch('/api/postage', {
       method: 'POST',
-      body:   JSON.stringify({ toPostcode: postcode, items }),
+      body:   JSON.stringify(requestBody),
     });
 
     if (data.services && data.services.length > 0) {
       selectedPostage = null;
       const servicesWrap = document.createElement('div'); servicesWrap.className = 'postage-services';
       const note = document.createElement('p'); note.className = 'postage-note';
-      note.textContent = items.length === 1
-        ? 'Postage from Airlie Beach (4802) to ' + postcode + '. Select a service:'
-        : 'Postage from Airlie Beach (4802) to ' + postcode + ' — combined rate for ' + items.length + ' parcels. Select a service:';
+      note.textContent = isIntl
+        ? 'International postage from Airlie Beach to ' + countryName + (items.length > 1 ? ' — combined rate for ' + items.length + ' parcels' : '') + '. Select a service:'
+        : (items.length === 1
+            ? 'Postage from Airlie Beach (4802) to ' + postcode + '. Select a service:'
+            : 'Postage from Airlie Beach (4802) to ' + postcode + ' — combined rate for ' + items.length + ' parcels. Select a service:');
       servicesWrap.appendChild(note);
 
       data.services.forEach((s, i) => {
@@ -915,9 +954,11 @@ async function calculatePostage() {
       });
 
       const disclaimer = document.createElement('p'); disclaimer.className = 'postage-disclaimer';
-      disclaimer.textContent = items.length === 1
-        ? 'Selected postage will be added to your total. Michael will confirm and dispatch once payment is received.'
-        : 'Combined postage for all ' + items.length + ' works. Each will be carefully packaged and dispatched separately once payment is received.';
+      disclaimer.textContent = isIntl
+        ? 'International shipments may be subject to customs duties or import taxes charged by the destination country — these are the responsibility of the buyer and are not included in the price shown. Michael will confirm and dispatch once payment is received.'
+        : (items.length === 1
+            ? 'Selected postage will be added to your total. Michael will confirm and dispatch once payment is received.'
+            : 'Combined postage for all ' + items.length + ' works. Each will be carefully packaged and dispatched separately once payment is received.');
       servicesWrap.appendChild(disclaimer);
       resultEl.innerHTML = ''; resultEl.appendChild(servicesWrap);
     } else {
@@ -976,14 +1017,28 @@ function showPaymentError(msg) {
 function fieldVal(id)       { return el(id).value.trim(); }
 function hasHtml(str)       { return /[<>]/.test(str); }
 function validPhone(str)    { return /^[0-9+\s\-]{6,20}$/.test(str); }
-function validPostcode(str) { return /^[0-9]{4,10}$/.test(str); }
+
+/**
+ * Validates a postcode/postal code. Domestic (AU) postcodes must be
+ * exactly 4 digits. International postal codes vary hugely in format
+ * (alphanumeric, with spaces or hyphens, or absent entirely in a small
+ * number of countries) — so for non-AU destinations we accept a lenient
+ * format: 2–12 characters, letters/digits/spaces/hyphens only.
+ */
+function validPostcode(str, countryCode) {
+  if (!countryCode || countryCode === 'AU') {
+    return /^[0-9]{4,10}$/.test(str);
+  }
+  return /^[A-Za-z0-9\s\-]{2,12}$/.test(str);
+}
 function validEmail(str)    { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(str); }
 
 function validateForm() {
+  const { code: countryCode } = getSelectedCountry();
+
   const textFields = [
     ['first-name', 'First name'], ['last-name', 'Last name'],
     ['address', 'Street address'], ['city', 'City'],
-    ['state', 'State'], ['country', 'Country'],
   ];
   for (var i = 0; i < textFields.length; i++) {
     var id = textFields[i][0]; var label = textFields[i][1];
@@ -991,18 +1046,31 @@ function validateForm() {
     if (!val) { showPaymentError('Please enter your ' + label + '.'); return null; }
     if (hasHtml(val)) { showPaymentError(label + ' must not contain HTML characters.'); return null; }
   }
+
+  // State is optional for international addresses (many countries don't use
+  // the concept the same way Australia does) but still checked for HTML if filled.
+  const stateVal = fieldVal('state');
+  if (countryCode === 'AU' && !stateVal) { showPaymentError('Please enter your state.'); return null; }
+  if (stateVal && hasHtml(stateVal)) { showPaymentError('State must not contain HTML characters.'); return null; }
+
   const email = fieldVal('email');
   if (!email) { showPaymentError('Please enter your email address.'); return null; }
   if (hasHtml(email) || !validEmail(email)) { showPaymentError('Please enter a valid email address.'); return null; }
   const phone = fieldVal('phone');
   if (phone && !validPhone(phone)) { showPaymentError('Please enter a valid phone number (digits, spaces, + and - only).'); return null; }
+
   const postcode = fieldVal('postcode');
   if (!postcode) { showPaymentError('Please enter your postcode.'); return null; }
-  if (!validPostcode(postcode)) { showPaymentError('Postcode must be numeric only.'); return null; }
+  if (hasHtml(postcode)) { showPaymentError('Postcode must not contain HTML characters.'); return null; }
+  if (!validPostcode(postcode, countryCode)) { showPaymentError('Please enter a valid postcode for the selected country.'); return null; }
+
+  const countrySelect = el('country');
+  const countryName   = countrySelect ? countrySelect.options[countrySelect.selectedIndex].text : 'Australia';
+
   return {
     firstName: fieldVal('first-name'), lastName: fieldVal('last-name'),
     email, phone, address: fieldVal('address'), city: fieldVal('city'),
-    state: fieldVal('state'), postcode, country: fieldVal('country'),
+    state: stateVal, postcode, country: countryName,
   };
 }
 
@@ -1144,8 +1212,11 @@ document.addEventListener('DOMContentLoaded', function() {
   wire('lightbox-next',          'click', lightboxNext);
   wire('lightbox-overlay',       'click', function(e) { if (e.target === el('lightbox-overlay')) closeLightbox(); });
 
-  // Oversized checkbox — toggles shipping dimensions visibility
+  // Oversized checkbox — toggles shipping dimensions visibility (admin panel)
   wire('new-oversized', 'change', updateOversizedToggle);
+
+  // Country dropdown — toggles postcode field and resets postage quote
+  wire('country', 'change', updatePostageSectionForCountry);
 
   document.addEventListener('keydown', function(e) {
     try {
