@@ -140,12 +140,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 
   <!-- ── STYLES ─────────────────────────────────────────────────────────── -->
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=6">
 
   <!-- ── SQUARE + APP SCRIPTS ──────────────────────────────────────────── -->
   <script src="https://web.squarecdn.com/v1/square.js" defer></script>
-  <script src="square-config.js?v=5" defer></script>
-  <script src="script.js?v=5" defer></script>
+  <script src="square-config.js?v=6" defer></script>
+  <script src="script.js?v=6" defer></script>
 
   <script>
     window.va = window.va || function () {
@@ -233,6 +233,15 @@
       <p class="gallery-section-body">These paintings are direct responses to that environment. Bold in colour, confident in mark making, and painted with genuine affection for a coastline that rewards close looking.</p>
       <p class="gallery-section-body">Available as original acrylic or oil on canvas in a range of sizes. Commissions welcome — whether you want a specific view, a favourite anchorage, or a memory of time spent on the water.</p>
     </div>
+    <!--
+      COLLECTIONS FILTER BAR
+      Populated by script.js from whatever collection names actually
+      appear among this category's current listings (plus an "All"
+      pill). Empty/hidden when no listing in this category has a
+      collection assigned. Purely client-side filtering — no reload,
+      no server call.
+    -->
+    <div class="collections-filter-bar hidden" id="collections-filter-seascapes"></div>
     <div class="gallery" id="gallery-seascapes"></div>
   </section>
 
@@ -247,6 +256,7 @@
       <p class="gallery-section-body">Original works are available for sale. Ecclesiastical and private commissions are welcomed and quoted individually — contact Michael to discuss your project.</p>
       <p class="gallery-section-note"><em>All works are original oil on canvas. Prices listed per work. Commission inquiries welcome.</em></p>
     </div>
+    <div class="collections-filter-bar hidden" id="collections-filter-figurative"></div>
     <div class="gallery" id="gallery-figurative"></div>
   </section>
 
@@ -616,6 +626,21 @@
             <button class="postage-calc-btn" id="postage-calc-btn">Calculate</button>
           </div>
           <div class="postage-result" id="postage-result" aria-live="polite"></div>
+
+          <!--
+            GELATO PRINT SHIPPING — independent result block.
+            Populated from the same /api/postage response's
+            gelatoServices/gelatoMessage fields, alongside (not merged
+            with) the AusPost result above. Only appears when the cart
+            contains at least one Gelato-sourced item. Reuses the same
+            .postage-service / .postage-service-selectable / .postage-radio
+            pattern, with its own radio group name (gelato-postage-option)
+            so a selection here doesn't clear the AusPost selection above.
+          -->
+          <div class="gelato-postage-section" id="gelato-postage-section">
+            <p class="gelato-postage-heading">Print Shipping</p>
+            <div class="postage-result" id="gelato-postage-result" aria-live="polite"></div>
+          </div>
         </div>
 
         <div class="form-section">
@@ -654,13 +679,55 @@
     </div>
   </div>
 
+  <!--
+    ── NEWSLETTER SIGNUP POPUP ─────────────────────────────────────────────
+    Shown once per visitor (tracked via localStorage — see
+    NEWSLETTER_SEEN_KEY in script.js) after a short delay, asking for name
+    + email. Submits to POST /api/contact with type: 'newsletter'. Never
+    shown to the admin or while another modal is already open.
+    This markup was missing from the deployed index.html even though
+    script.js/style.css already fully support it — restored here.
+  -->
+  <div class="newsletter-overlay" id="newsletter-overlay" role="dialog" aria-modal="true" aria-label="Join the mailing list">
+    <div class="newsletter-box">
+      <button class="newsletter-close" id="newsletter-close-btn" aria-label="Close">&#x2715;</button>
+      <h2 class="newsletter-title">Stay in the loop</h2>
+      <p class="newsletter-sub">Join the mailing list for new paintings, exhibitions, and the occasional studio update. No spam, unsubscribe any time.</p>
+      <div class="form-group">
+        <label for="newsletter-name" class="contact-form-label">Your name</label>
+        <input type="text" id="newsletter-name" placeholder="Jane Smith">
+      </div>
+      <div class="form-group">
+        <label for="newsletter-email" class="contact-form-label">Your email</label>
+        <input type="email" id="newsletter-email" placeholder="jane@example.com">
+      </div>
+      <p class="newsletter-error" id="newsletter-error" role="alert"></p>
+      <button class="newsletter-submit-btn" id="newsletter-submit-btn">Join the mailing list</button>
+      <button class="newsletter-dismiss-btn" id="newsletter-dismiss-btn">No thanks</button>
+      <p class="newsletter-success" id="newsletter-success" role="status"></p>
+    </div>
+  </div>
+
   <!-- ── ADD PAINTING PANEL ─────────────────────────────────────────────── -->
   <aside class="add-panel" id="add-panel" role="dialog" aria-modal="true" aria-label="Add a painting">
     <div class="add-panel-head">
-      <h2 class="add-panel-title">Add a painting</h2>
+      <h2 class="add-panel-title" id="add-panel-title">Add a painting</h2>
       <button class="close-btn" id="add-panel-close-btn" aria-label="Close panel">&#x2715;</button>
     </div>
     <div class="add-panel-body">
+
+      <!--
+        EXISTING PHOTOS (edit mode only)
+        Shown only when editing an existing listing (openEditPanel() in
+        script.js populates it and un-hides it). Each tile has its own
+        remove (×) — removing one stages its URL into removeImageUrls,
+        sent to PUT /api/paintings on save. New photos added below still
+        go through the same upload-image.js flow as the Add flow.
+      -->
+      <div class="existing-images-section hidden" id="existing-images-section">
+        <p class="field-helper">Current photos — click × to remove one (removed when you save).</p>
+        <div class="img-strip" id="existing-img-strip"></div>
+      </div>
 
       <!--
         MULTI-IMAGE UPLOAD AREA
@@ -705,15 +772,87 @@
       </div>
 
       <!--
-        SHIPPING / OVERSIZED TOGGLE
-        When "Oversized" is checked, the dimensions fields are hidden and
-        the painting is listed with a "Contact Artist" button instead of
-        "Add to selection". Oversized paintings cannot be added to the cart.
+        COLLECTIONS — free-text tags, multiple per painting.
+        Type a name and press Enter (or click Add) to add a chip; click a
+        chip's × to remove it. script.js keeps the working list in
+        newCollections[] and renders it into #collections-chips.
       -->
-      <div class="form-section-title shipping-subhead">Shipping</div>
-      <div class="form-group-inline" style="margin-bottom:0.75rem;">
-        <input type="checkbox" id="new-oversized">
-        <label for="new-oversized" class="checkbox-label">Oversized — freight quote required (shows "Contact Artist" button)</label>
+      <div class="form-group">
+        <label for="new-collection-input">Collections</label>
+        <div class="collections-input-row">
+          <input type="text" id="new-collection-input" placeholder="e.g. Behold the Man">
+          <button type="button" class="collections-add-btn" id="collections-add-btn">Add</button>
+        </div>
+        <div class="collections-chips" id="collections-chips"></div>
+        <p class="field-helper">A painting can belong to more than one collection.</p>
+      </div>
+
+      <!--
+        LISTING TYPE — three-way selector
+        - Original: standard listing, shows the #shipping-dimensions fields,
+          ships via AusPost, cannot be marked source: 'gelato' or oversized.
+        - Oversized: freight-required listing, dimensions hidden, shows a
+          "Contact Artist" button instead of "Add to selection".
+        - Gelato print: fulfilled by Gelato print-on-demand, dimensions
+          hidden (Gelato quotes its own shipping), reveals the Gelato-only
+          field group below (Product UID, Import from Gelato, Print group,
+          Size label).
+        updateListingTypeToggle() in script.js shows/hides the
+        #shipping-dimensions block and the #gelato-fields block based on
+        which radio is checked. This replaces the old standalone
+        "Oversized" checkbox / updateOversizedToggle().
+      -->
+      <div class="form-section-title shipping-subhead">Listing type</div>
+      <div class="listing-type-group" role="radiogroup" aria-label="Listing type">
+        <label class="listing-type-option">
+          <input type="radio" name="listing-type" id="listing-type-original" value="original" checked>
+          <span class="checkbox-label">Original</span>
+        </label>
+        <label class="listing-type-option">
+          <input type="radio" name="listing-type" id="listing-type-oversized" value="oversized">
+          <span class="checkbox-label">Oversized — freight quote required</span>
+        </label>
+        <label class="listing-type-option">
+          <input type="radio" name="listing-type" id="listing-type-gelato" value="gelato">
+          <span class="checkbox-label">Gelato print</span>
+        </label>
+      </div>
+
+      <!--
+        GELATO-ONLY FIELD GROUP
+        Hidden unless "Gelato print" is selected above.
+        - Product UID: manual entry, always available regardless of
+          whether GELATO_STORE_ID / the Import button is configured.
+        - Import from Gelato: fetches GET /api/paintings (admin, Gelato
+          product/variant list) and renders results into
+          #gelato-import-results for the admin to click and auto-fill the
+          Product UID field. If Gelato isn't configured (no
+          GELATO_STORE_ID), the endpoint returns success: false and the
+          message is shown here inline — expected, not an error state.
+        - Print group: giving two listings the same value groups them
+          into one gallery card with a size picker (see printGroupId).
+        - Size label: human-readable variant label, e.g. "A4".
+      -->
+      <div id="gelato-fields" class="gelato-fields hidden">
+        <div class="form-section-title shipping-subhead">Gelato print details</div>
+        <div class="form-group">
+          <label for="new-gelato-uid">Gelato Product UID</label>
+          <input type="text" id="new-gelato-uid" placeholder="Paste manually, or use Import below">
+        </div>
+        <div class="form-group-inline gelato-import-row">
+          <button type="button" class="gelato-import-btn" id="gelato-import-btn">Import from Gelato</button>
+        </div>
+        <p class="gelato-import-message" id="gelato-import-message"></p>
+        <div class="gelato-import-results" id="gelato-import-results"></div>
+        <div class="form-group">
+          <label for="new-print-group">Print group</label>
+          <input type="text" id="new-print-group" placeholder="e.g. whitehaven-dusk">
+          <p class="field-helper">Give two listings the same value to group them into one gallery card with a size picker.</p>
+        </div>
+        <div class="form-group">
+          <label for="new-variant-label">Size label</label>
+          <input type="text" id="new-variant-label" placeholder="e.g. A4">
+        </div>
       </div>
 
       <div id="shipping-dimensions" class="shipping-dimensions">

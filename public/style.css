@@ -489,6 +489,56 @@ nav {
   text-transform: uppercase; color: var(--muted); padding: 8px;
 }
 
+/* ─── NEWSLETTER SIGNUP POPUP ─────────────────────────────────────────────── */
+.newsletter-overlay {
+  position: fixed; inset: 0; z-index: 550; background: rgba(26,22,18,0.7);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.3s;
+  padding: 1.5rem;
+}
+.newsletter-overlay.open { opacity: 1; pointer-events: all; }
+.newsletter-box {
+  position: relative;
+  background: var(--warm-white); width: 100%; max-width: 420px;
+  border: 1px solid var(--border); padding: 2.5rem;
+  transform: translateY(12px); transition: transform 0.3s;
+}
+.newsletter-overlay.open .newsletter-box { transform: translateY(0); }
+.newsletter-close {
+  position: absolute; top: 1rem; right: 1rem;
+  background: none; border: none; cursor: pointer; color: var(--muted);
+  font-family: 'DM Mono', monospace; font-size: 16px; line-height: 1;
+  padding: 4px; transition: color 0.2s;
+}
+.newsletter-close:hover { color: var(--ink); }
+.newsletter-title {
+  font-family: 'Cormorant Garamond', serif; font-size: 28px; font-weight: 300;
+  font-style: italic; margin-bottom: 0.75rem; color: var(--ink);
+}
+.newsletter-sub {
+  font-size: 12px; color: var(--muted); line-height: 1.8; margin-bottom: 1.75rem;
+}
+.newsletter-error {
+  color: #c0392b; font-size: 11px; margin-top: 4px; min-height: 16px;
+}
+.newsletter-submit-btn {
+  width: 100%; padding: 13px; margin-top: 1rem;
+  background: var(--gold); color: #fff; border: none; cursor: pointer;
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  letter-spacing: 0.12em; text-transform: uppercase; transition: background 0.2s;
+}
+.newsletter-submit-btn:hover:not(:disabled) { background: var(--gold-light); }
+.newsletter-submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.newsletter-dismiss-btn {
+  width: 100%; margin-top: 10px; background: none; border: none; cursor: pointer;
+  font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted); padding: 8px; transition: color 0.2s;
+}
+.newsletter-dismiss-btn:hover { color: var(--ink); }
+.newsletter-success {
+  color: #2d5a27; font-size: 12px; margin-top: 12px; text-align: center; min-height: 16px;
+}
+
 /* ─── ADD PAINTING PANEL ──────────────────────────────────────────────────── */
 .add-panel {
   position: fixed; right: 0; top: 0; bottom: 0; z-index: 400;
@@ -1167,4 +1217,302 @@ footer {
   .lightbox-img-wrap,
   .lightbox-img { max-height: calc(100vh - 140px); }
   .lightbox-title { font-size: 15px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GELATO PRINT-ON-DEMAND
+   Size-picker pills (grouped gallery card), the admin listing-type selector
+   and Gelato field group, and the second ("Print Shipping") postage-result
+   block at checkout. No new visual language — every element here reuses a
+   precedent already established elsewhere (gold-accent active states,
+   admin form-group/checkbox-label patterns, the postage-service-selectable
+   radio pattern).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── SIZE PICKER (grouped gallery card) ──────────────────────────────────── */
+/*
+  One pill per size variant, rendered on a grouped card only (see
+  renderCardContent() in script.js). Active pill reuses the same gold
+  accent as every other "selected" state in the site (postage radios,
+  the add-to-cart "added" state).
+*/
+.size-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.size-pill {
+  padding: 5px 14px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  transition: all 0.2s;
+}
+.size-pill:hover { border-color: var(--gold); color: var(--ink); }
+.size-pill.active {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #fff;
+}
+
+/* ─── ADMIN — LISTING TYPE SELECTOR ───────────────────────────────────────── */
+/*
+  Replaces the old standalone "Oversized" checkbox. A row of three
+  selectable options — styled consistently with the existing
+  .form-group-inline / .checkbox-label pattern used elsewhere in the
+  add-painting panel, with a gold border+tint on whichever is checked.
+*/
+.listing-type-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 1.5rem;
+}
+.listing-type-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex: 1 1 auto;
+}
+.listing-type-option:hover { border-color: var(--gold); }
+.listing-type-option:has(input:checked) {
+  border-color: var(--gold);
+  background: rgba(184,150,90,0.08);
+}
+.listing-type-option input { accent-color: var(--gold); cursor: pointer; }
+.listing-type-option .checkbox-label { cursor: pointer; }
+
+/* ─── ADMIN — GELATO FIELD GROUP ──────────────────────────────────────────── */
+.gelato-fields {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  background: var(--parchment);
+}
+.gelato-fields.hidden { display: none; }
+
+.field-helper {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-top: 4px;
+}
+
+.gelato-import-row { margin: 0.5rem 0 0.75rem; }
+.gelato-import-btn {
+  padding: 8px 16px;
+  background: var(--ink);
+  color: var(--warm-white);
+  border: none;
+  cursor: pointer;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: background 0.2s;
+}
+.gelato-import-btn:hover:not(:disabled) { background: var(--accent); }
+.gelato-import-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.gelato-import-message {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 0.5rem;
+  min-height: 14px;
+}
+
+/* List/dropdown of importable Gelato products — consistent with existing
+   admin panel input/button styling, no new visual language. */
+.gelato-import-results {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  background: white;
+  margin-bottom: 1rem;
+}
+.gelato-import-results:empty { display: none; margin-bottom: 0; border: none; }
+
+.gelato-import-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  text-align: left;
+  font-family: 'DM Mono', monospace;
+  transition: background 0.15s;
+}
+.gelato-import-item:last-child { border-bottom: none; }
+.gelato-import-item:hover { background: var(--parchment); }
+.gelato-import-item-title { font-size: 11px; color: var(--ink); }
+.gelato-import-item-uid { font-size: 9px; color: var(--muted); white-space: nowrap; }
+
+/* ─── GELATO POSTAGE (checkout) — second result block ─────────────────────── */
+/*
+  Sits directly below the existing #postage-result (AusPost) block, with
+  its own small heading so a mixed-cart checkout clearly shows two
+  distinct, independently-selectable service lists rather than reading as
+  one merged block. Hidden entirely (via updateGelatoPostageVisibility()
+  in script.js) unless the cart actually contains a Gelato item.
+*/
+.gelato-postage-section {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+.gelato-postage-section.hidden { display: none; }
+.gelato-postage-heading {
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 0.75rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TASK 4 — ADMIN EDITING, REORDERING, COLLECTIONS
+   Drag-and-drop affordance on gallery cards, the admin Edit button, the
+   existing-photos strip and collections tag input in the add/edit panel,
+   and the public collections filter bar. Reuses existing precedents
+   throughout — the .img-strip-thumb tile pattern, the gold-accent
+   "active" state, and the existing .admin-ctrl-btn styling.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── DRAG-AND-DROP (admin gallery cards) ─────────────────────────────────── */
+.artwork-card[draggable="true"] {
+  cursor: grab;
+}
+.artwork-card[draggable="true"]:active {
+  cursor: grabbing;
+}
+.artwork-card.dragging {
+  opacity: 0.35;
+}
+
+/* ─── ADMIN CONTROLS — EDIT BUTTON ────────────────────────────────────────── */
+.admin-ctrl-btn.edit-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* ─── ADD/EDIT PANEL — EXISTING PHOTOS (edit mode) ────────────────────────── */
+.existing-images-section {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.existing-images-section.hidden { display: none; }
+.existing-images-section .img-strip { margin-top: 0.5rem; }
+
+/* ─── ADD/EDIT PANEL — COLLECTIONS TAG INPUT ──────────────────────────────── */
+.collections-input-row {
+  display: flex;
+  gap: 8px;
+}
+.collections-input-row input { flex: 1; }
+.collections-add-btn {
+  padding: 0 18px;
+  background: var(--ink);
+  color: var(--warm-white);
+  border: none;
+  cursor: pointer;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.collections-add-btn:hover { background: var(--accent); }
+
+.collections-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.collections-chips:empty { margin-top: 0; }
+.collection-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 12px;
+  background: var(--parchment);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--ink);
+}
+.collection-chip-remove {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.collection-chip-remove:hover { background: #c0392b; color: #fff; }
+
+/* ─── PUBLIC GALLERY — COLLECTIONS FILTER BAR ─────────────────────────────── */
+/*
+  Sits between a gallery section's intro copy and its grid. Built entirely
+  client-side from whichever collection names are actually in use in that
+  category (renderCollectionsFilterBar() in script.js) — hidden via the
+  .hidden class when none exist, so a category with no collections looks
+  exactly as it always has.
+*/
+.collections-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 2rem;
+}
+.collections-filter-bar.hidden { display: none; }
+.collection-pill {
+  padding: 6px 16px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  transition: all 0.2s;
+}
+.collection-pill:hover { border-color: var(--gold); color: var(--ink); }
+.collection-pill.active {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #fff;
+}
+
+@media (max-width: 700px) {
+  .collections-input-row { flex-direction: column; }
+  .collections-add-btn { padding: 10px; }
 }

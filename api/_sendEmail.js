@@ -249,3 +249,68 @@ export async function sendContactEmail({ name, email, message }) {
     html,
   });
 }
+
+/**
+ * Sends a mailing list signup notification to the admin.
+ *
+ * Triggered by the "join our mailing list" pop-up shown to new visitors.
+ * Unlike sendContactEmail, there is no message body — just name and email,
+ * captured so Michael can add the visitor to his mailing list manually
+ * (or import into whatever mailing list tool he uses).
+ *
+ * @param {object} opts
+ * @param {string} opts.name  - visitor's name
+ * @param {string} opts.email - visitor's email
+ */
+export async function sendNewsletterSignupEmail({ name, email }) {
+  const adminEmail = process.env.ADMIN_EMAIL || 'michael.p.vanblerk@gmail.com';
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f9f6f1;font-family:'Courier New',monospace;font-size:13px;color:#1a1612;">
+  <div style="max-width:580px;margin:40px auto;background:#fff;border:1px solid rgba(26,22,18,0.12);">
+
+    <div style="background:#1a1612;padding:24px 32px;">
+      <p style="margin:0;font-family:Georgia,serif;font-size:22px;font-weight:300;color:#f9f6f1;letter-spacing:0.1em;text-transform:uppercase;">
+        Airlie Beach Art
+      </p>
+      <p style="margin:6px 0 0;font-size:11px;color:#b8965a;letter-spacing:0.15em;text-transform:uppercase;">
+        New mailing list signup
+      </p>
+    </div>
+
+    <div style="padding:32px;">
+
+      <p style="margin:0 0 16px;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#b8965a;border-bottom:1px solid #ede9e1;padding-bottom:8px;">
+        Subscriber
+      </p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+        <tr>
+          <td style="padding:6px 12px;width:80px;color:#7a7368;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;">Name</td>
+          <td style="padding:6px 12px;">${name}</td>
+        </tr>
+        <tr style="background:#f9f6f1;">
+          <td style="padding:6px 12px;color:#7a7368;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;">Email</td>
+          <td style="padding:6px 12px;"><a href="mailto:${email}" style="color:#1a1612;">${email}</a></td>
+        </tr>
+      </table>
+
+      <p style="margin:0;font-size:11px;color:#7a7368;line-height:1.7;">
+        This visitor asked to join your mailing list via the pop-up on your website.
+        Add them to your mailing list tool of choice, or reply directly to
+        <a href="mailto:${email}" style="color:#b8965a;">${email}</a>.
+      </p>
+
+    </div>
+  </div>
+</body>
+</html>`;
+
+  return sendEmail({
+    to:      adminEmail,
+    subject: `New mailing list signup — ${name}`,
+    html,
+  });
+}
