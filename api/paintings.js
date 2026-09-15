@@ -257,8 +257,15 @@ export default async function handler(req, res) {
         if (!isValidString(gelatoProductUid)) {
           return res.status(400).json({ success: false, error: 'A Gelato Product UID is required for print listings.' });
         }
+        // 300, not a round "reasonable text field" number like 40/100 —
+        // gelatoProductUid is an opaque ID pasted verbatim from Gelato
+        // (or filled by the Import button), not text the admin can
+        // shorten, and Gelato's real catalog UIDs are long descriptive
+        // slugs (product + size + material + colour codes concatenated)
+        // that can genuinely exceed 100 characters. A too-low cap here
+        // would silently block a legitimate listing with no workaround.
         const gelatoCaps = capFields([
-          ['Gelato Product UID', gelatoProductUid, 100],
+          ['Gelato Product UID', gelatoProductUid, 300],
           ...(printGroupId ? [['Print group', String(printGroupId), 100]] : []),
           ...(variantLabel ? [['Size label', String(variantLabel), 40]] : []),
         ]);
@@ -357,8 +364,15 @@ export default async function handler(req, res) {
         if (!isValidString(gelatoProductUid)) {
           return res.status(400).json({ success: false, error: 'A Gelato Product UID is required for print listings.' });
         }
+        // 300, not a round "reasonable text field" number like 40/100 —
+        // gelatoProductUid is an opaque ID pasted verbatim from Gelato
+        // (or filled by the Import button), not text the admin can
+        // shorten, and Gelato's real catalog UIDs are long descriptive
+        // slugs (product + size + material + colour codes concatenated)
+        // that can genuinely exceed 100 characters. A too-low cap here
+        // would silently block a legitimate listing with no workaround.
         const gelatoCaps = capFields([
-          ['Gelato Product UID', gelatoProductUid, 100],
+          ['Gelato Product UID', gelatoProductUid, 300],
           ...(printGroupId ? [['Print group', String(printGroupId), 100]] : []),
           ...(variantLabel ? [['Size label', String(variantLabel), 40]] : []),
         ]);
@@ -514,5 +528,3 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: 'Method not allowed' });
   }
 }
- 
-
