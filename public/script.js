@@ -1329,7 +1329,6 @@ function closeCheckout() {
   el('checkout-modal').classList.remove('open');
   el('postage-result').innerHTML = '';
   el('gelato-postage-result').innerHTML = '';
-  el('buyer-postcode').value    = '';
   selectedPostage = null;
   selectedGelatoPostage = null;
   document.body.style.overflow = '';
@@ -1434,10 +1433,12 @@ function getSelectedCountry() {
 }
 
 /**
- * Shows/hides the postcode input in the postage section based on the
- * selected destination country. AusPost's international PAC API quotes
- * by country + weight only — no postcode is used or required for
- * international destinations.
+ * Updates the postage section's intro copy based on the selected
+ * destination country. AusPost's international PAC API quotes by
+ * country + weight only — no postcode is used or required for
+ * international destinations. The domestic postcode itself lives in the
+ * shipping address section above (#postcode) — the postage section no
+ * longer has its own duplicate postcode field, it just reads that one.
  *
  * Called when the country dropdown changes, and once when checkout opens
  * so the section reflects whatever was already selected.
@@ -1446,13 +1447,11 @@ function updatePostageSectionForCountry() {
   const { code, name } = getSelectedCountry();
   const isIntl = code !== 'AU';
 
-  const postcodeGroup = el('postage-postcode-group');
-  const intro         = el('postage-intro');
-  if (postcodeGroup) postcodeGroup.style.display = isIntl ? 'none' : '';
+  const intro = el('postage-intro');
   if (intro) {
     intro.textContent = isIntl
       ? 'Postage to ' + name + ' will be calculated based on Australia Post international rates. Click Calculate to see options.'
-      : 'Enter your postcode to calculate shipping from Airlie Beach, then select a postage option to continue.';
+      : 'Uses the postcode from your shipping address above — click Calculate to see shipping options.';
   }
 
   // Clear any previous quotes — the destination has changed
@@ -1572,11 +1571,16 @@ async function calculatePostage() {
   const gelatoCartItems = cart.filter(a => a.source === 'gelato');
 
   // ── Domestic: postcode required (only when the cart has non-Gelato items) ─
+  // Read straight from the shipping-address postcode field (#postcode) —
+  // there is no separate postage-only postcode input anymore, so the buyer
+  // only ever has to type their postcode once.
   let postcode = '';
   if (auspostItems.length > 0 && !isIntl) {
-    postcode = el('buyer-postcode').value.trim();
+    postcode = el('postcode').value.trim();
     if (!postcode || !/^[0-9]{4}$/.test(postcode)) {
-      resultEl.innerHTML = '<p class="postage-error">Please enter a valid 4-digit postcode.</p>'; return;
+      resultEl.innerHTML = '<p class="postage-error">Please enter a valid 4-digit postcode in your shipping address above.</p>';
+      el('postcode').focus();
+      return;
     }
   }
 
@@ -1997,7 +2001,7 @@ document.addEventListener('DOMContentLoaded', function() {
   wire('checkout-close-btn',     'click', closeCheckout);
   wire('pay-btn',                'click', handlePayment);
   wire('postage-calc-btn',       'click', calculatePostage);
-  wire('buyer-postcode',         'keydown', function(e) { if (e.key === 'Enter') calculatePostage(); });
+  wire('postcode',               'keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); calculatePostage(); } });
   wire('success-continue-btn',   'click', resetShop);
   wire('login-btn',              'click', attemptLogin);
   wire('login-cancel-btn',       'click', closeLogin);
