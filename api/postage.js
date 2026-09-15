@@ -260,6 +260,15 @@ async function quoteGelato(gelatoItems, recipient) {
   })).filter(s => s.price > 0);
  
   if (services.length === 0) {
+    // Diagnostic aid — Gelato never published a strict schema for this
+    // response (see Part 5.2 of the project summary), so the field-name
+    // guessing above may simply be wrong rather than Gelato genuinely
+    // having no service for this destination. Logging the raw response
+    // here means the actual field names can be read straight out of
+    // Vercel's function logs next time this fires, instead of guessing
+    // further blind. Only fires on the "nothing usable found" path —
+    // silent on every normal, successful quote.
+    console.error('Gelato quote returned no usable services — raw response:', JSON.stringify(data));
     return { message: 'No print shipping options were found for this destination. Please contact Michael for a quote.' };
   }
  
@@ -396,5 +405,3 @@ export default async function handler(req, res) {
  
   return res.status(200).json(response);
 }
- 
-
