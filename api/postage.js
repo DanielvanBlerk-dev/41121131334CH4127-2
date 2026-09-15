@@ -246,29 +246,51 @@ async function quoteGelato(gelatoItems, recipient) {
     return { message: 'Could not read print shipping rates. Please contact Michael for a quote.' };
   }
  
-  // Defensive parsing — see caveat in the function comment above.
-  const rawQuotes = data.quotes || data.shipmentMethods || (Array.isArray(data) ? data : []);
-  const list = Array.isArray(rawQuotes) ? rawQuotes : [rawQuotes].filter(Boolean);
- 
-  const services = list.map(q => ({
-    name:  q.shipmentMethodName || q.name || 'Print Shipping',
-    price: parseFloat(q.price ?? q.shipmentPrice ?? q.totalPrice ?? q.amount) || 0,
-    shipmentMethodUid: q.shipmentMethodUid || q.uid || null,
-    deliveryTime: (q.minDeliveryDays != null && q.maxDeliveryDays != null)
-      ? `${q.minDeliveryDays}–${q.maxDeliveryDays} business days`
-      : undefined,
-  })).filter(s => s.price > 0);
- 
+  // ── Parsing — CONFIRMED against a real Gelato quote response ──────────
+  // (previously defensive/guessed; verified via a live /v4/orders:quote
+  // call, logged and inspected during testing — see the project summary,
+  // Part 5.2, for the gap this closes). The actual shape:
+  //   { orderReferenceId, quotes: [ { id, itemReferenceIds, products: [...],
+  //       fulfillmentCountry, shipmentMethods: [ { shipmentMethodUid, name,
+  //       price, currency, minDeliveryDays, maxDeliveryDays, ... } ],
+  //       expirationDateTime, ... } ], errors: [] }
+  // `quotes` groups everything requested into shipments (we always send
+  // every Gelato cart item in one call, so in practice this is a single
+  // group); the actual selectable options are its OWN nested
+  // shipmentMethods[] array, not the quote object itself as originally
+  // guessed. `products[].price` on the quote is the PRINT's price, not
+  // shipping — never read it here.
+  const quoteGroups = Array.isArray(data.quotes) ? data.quotes : [];
+  const rawMethods  = quoteGroups.flatMap(q => Array.isArray(q.shipmentMethods) ? q.shipmentMethods : []);
+
+  const services = rawMethods
+    .map(m => ({
+      name:  m.name || m.shipmentMethodName || 'Print Shipping',
+      price: parseFloat(m.price ?? m.initialPrice ?? m.shipmentPrice ?? m.totalPrice ?? m.amount),
+      shipmentMethodUid: m.shipmentMethodUid || m.uid || null,
+      deliveryTime: (m.minDeliveryDays != null && m.maxDeliveryDays != null)
+        ? `${m.minDeliveryDays}–${m.maxDeliveryDays} business days`
+        : undefined,
+    }))
+    // A method with a null/non-numeric price (seen in real testing —
+    // Gelato returned a valid "Standard delivery" method with
+    // price: null) is excluded rather than shown as a free/zero option.
+    .filter(s => Number.isFinite(s.price) && s.price > 0);
+
   if (services.length === 0) {
-    // Diagnostic aid — Gelato never published a strict schema for this
-    // response (see Part 5.2 of the project summary), so the field-name
-    // guessing above may simply be wrong rather than Gelato genuinely
-    // having no service for this destination. Logging the raw response
-    // here means the actual field names can be read straight out of
-    // Vercel's function logs next time this fires, instead of guessing
-    // further blind. Only fires on the "nothing usable found" path —
-    // silent on every normal, successful quote.
-    console.error('Gelato quote returned no usable services — raw response:', JSON.stringify(data));
+    // Distinguish "Gelato gave us methods but none had a usable price"
+    // from "Gelato gave us no methods at all" — both currently show the
+    // same message to the buyer, but this line tells us which actually
+    // happened next time it's checked in Vercel's logs.
+    console.error(
+      rawMethods.length > 0
+        ? `Gelato returned ${rawMethods.length} shipment method(s) but none had a usable price — raw response:`
+        : 'Gelato quote returned no shipment methods at all — raw response:',
+      JSON.stringify(data)
+    );
+    if (Array.isArray(data.errors) && data.errors.length > 0) {
+      console.error('Gelato quote errors array:', JSON.stringify(data.errors));
+    }
     return { message: 'No print shipping options were found for this destination. Please contact Michael for a quote.' };
   }
  
