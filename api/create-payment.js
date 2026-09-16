@@ -521,51 +521,74 @@ export default async function handler(req, res) {
     await redis.ltrim('order-index', 0, 499);
  
     // ── Send purchase notification to admin ───────────────────────────────
-    // Fire-and-forget — don't let email failure block the success response.
-    sendPurchaseNotification({
-      orderId,
-      items:        purchasedItems.map(a => ({ title: a.title, price: a.price })),
-      artworkTotal: expectedArtworkCents / 100,
-      postageName,
-      postagePrice: postageAmount,
-      grandTotal:   expectedAmountCents / 100,
-      customer:     { firstName, lastName, email, phone: phone || '' },
-      shipping:     { address, city, state, postcode, country },
-    }).catch(err => console.error('Purchase notification email failed:', err));
- 
+    // AWAITED, not fire-and-forget. It was fire-and-forget originally (to
+    // never let a slow email API delay the buyer's checkout response), but
+    // on Vercel that's a real trap: once the HTTP response is sent, the
+    // function's execution can be frozen/torn down immediately, and a
+    // promise nobody waited on can simply never finish — which is exactly
+    // what was happening here (confirmed: real orders completed, nothing
+    // ever reached Resend at all). Wrapped in try/catch so a failure here
+    // still can never fail or block the buyer's payment — it just means the
+    // response takes an extra beat while this completes first.
+    try {
+      await sendPurchaseNotification({
+        orderId,
+        items:        purchasedItems.map(a => ({ title: a.title, price: a.price })),
+        artworkTotal: expectedArtworkCents / 100,
+        postageName,
+        postagePrice: postageAmount,
+        grandTotal:   expectedAmountCents / 100,
+        customer:     { firstName, lastName, email, phone: phone || '' },
+        shipping:     { address, city, state, postcode, country },
+      });
+    } catch (err) {
+      console.error('Purchase notification email failed:', err);
+    }
+
     // ── Submit print job(s) to Gelato ──────────────────────────────────────
-    // Fire-and-forget — the customer has already been charged correctly.
-    // A failure here is logged for Michael to submit the print job manually;
-    // it must never affect the checkout response the buyer sees.
+    // Also now awaited, for the same reason as above — the customer has
+    // already been charged correctly either way, and a failure here still
+    // can never affect the checkout response the buyer sees, it just means
+    // this is resolved (successfully or not, including the failure-alert
+    // email) before that response is sent, instead of racing the function
+    // being torn down.
     const gelatoPurchasedItems = purchasedItems.filter(a => a.source === 'gelato');
     if (gelatoPurchasedItems.length > 0) {
-      submitGelatoOrder({
-        orderId,
-        items: gelatoPurchasedItems,
-        shipmentMethodUid: gelatoQuote?.shipmentMethodUid || null,
-        customer: { firstName, lastName, email, phone: phone || '' },
-        shippingAddress: { address, city, state, postcode, countryCode: normalisedCountryCode },
-      }).catch(err => {
-        console.error('Gelato order submission failed:', err);
-        auditLog({
-          action: 'gelato_order_failed',
-          ip,
-          detail: {
-            orderId,
-            error:   err.message,
-            itemIds: gelatoPurchasedItems.map(a => a.id),
-          },
-        }).catch(() => {});
-        sendGelatoFailureAlert({
+      try {
+        await submitGelatoOrder({
           orderId,
           items: gelatoPurchasedItems,
+          shipmentMethodUid: gelatoQuote?.shipmentMethodUid || null,
           customer: { firstName, lastName, email, phone: phone || '' },
           shippingAddress: { address, city, state, postcode, countryCode: normalisedCountryCode },
-          error: err.message,
-        }).catch(emailErr => console.error('Gelato failure alert email also failed:', emailErr));
-      });
+        });
+      } catch (err) {
+        console.error('Gelato order submission failed:', err);
+        try {
+          await auditLog({
+            action: 'gelato_order_failed',
+            ip,
+            detail: {
+              orderId,
+              error:   err.message,
+              itemIds: gelatoPurchasedItems.map(a => a.id),
+            },
+          });
+        } catch {}
+        try {
+          await sendGelatoFailureAlert({
+            orderId,
+            items: gelatoPurchasedItems,
+            customer: { firstName, lastName, email, phone: phone || '' },
+            shippingAddress: { address, city, state, postcode, countryCode: normalisedCountryCode },
+            error: err.message,
+          });
+        } catch (emailErr) {
+          console.error('Gelato failure alert email also failed:', emailErr);
+        }
+      }
     }
- 
+
     return res.status(200).json({ success: true, orderId });
  
   } catch (err) {
