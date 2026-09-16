@@ -4,7 +4,7 @@ import { auditLog } from './_auditLog.js';
 import { checkCsrf } from './_csrf.js';
 import { checkBodySize } from './_bodyLimit.js';
 import { capFields } from './_sanitize.js';
-import { sendPurchaseNotification } from './_sendEmail.js';
+import { sendEmail, sendPurchaseNotification } from './_sendEmail.js';
  
 const redis = new Redis({
   url:   process.env.UPSTASH_REDIS_REST_URL,
@@ -98,18 +98,34 @@ async function submitGelatoOrder({ orderId, items, shipmentMethodUid, customer, 
   if (!apiKey) throw new Error('GELATO_API_KEY not configured — cannot submit print order.');
   if (!shipmentMethodUid) throw new Error('No Gelato shipment method captured from quote — cannot submit print order.');
   if (!shippingAddress.countryCode) throw new Error('Missing destination country code — cannot submit print order.');
- 
+  // Gelato's shippingAddress schema documents `state` as required (confirmed
+  // against dashboard.gelato.com/docs/orders/order_details/, 2026-09) — the
+  // checkout form only enforces it client-side for AU addresses, so the
+  // handler below now enforces it server-side for every Gelato order before
+  // this function is ever called. Checked again here too, defensively.
+  if (!shippingAddress.state) throw new Error('Missing state/province — cannot submit print order.');
+
   const body = {
     orderType:           'order',
     orderReferenceId:    `airliebeachart-${orderId}`,
     customerReferenceId: customer.email,
     currency:            'AUD',
+    // NOTE: no `files` array per item. Every Gelato product we sell was
+    // imported from Michael's own Gelato Store (Ecommerce API), where the
+    // print-ready design is already registered against that productUid on
+    // Gelato's side — that's the whole point of a store product, vs. a raw
+    // catalog product ordered ad hoc. `art.images[0]` is the *listing
+    // photo* shown on the site (a photo of the painting), not a print file,
+    // and was previously being sent here as if it were one — a near-certain
+    // cause of Gelato rejecting the order outright. Gelato's own docs mark
+    // `files` as only conditionally required, consistent with it not being
+    // needed when the product already has a registered design. Not yet
+    // confirmed against a real order — if Gelato still rejects orders after
+    // this change, the failure-alert email below will now surface the real
+    // reason instead of failing silently.
     items: items.map((art, i) => ({
       itemReferenceId: `item-${i}-${art.id}`,
       productUid:      art.gelatoProductUid,
-      files: [
-        { type: 'default', url: (art.images && art.images[0]) || '' },
-      ],
       quantity: 1,
     })),
     shipmentMethodUid,
@@ -119,7 +135,7 @@ async function submitGelatoOrder({ orderId, items, shipmentMethodUid, customer, 
       addressLine1: shippingAddress.address,
       city:         shippingAddress.city,
       postCode:     shippingAddress.postcode,
-      state:        shippingAddress.state || undefined,
+      state:        shippingAddress.state,
       country:      shippingAddress.countryCode.toUpperCase(),
       email:        customer.email,
       phone:        customer.phone || undefined,
@@ -136,8 +152,68 @@ async function submitGelatoOrder({ orderId, items, shipmentMethodUid, customer, 
     const errText = await res.text().catch(() => '');
     throw new Error(`Gelato order API error ${res.status}: ${errText}`);
   }
- 
+
   return res.json();
+}
+
+/**
+ * Emails Michael immediately when a Gelato print-order submission fails
+ * after the buyer has already been charged. Previously this was logged only
+ * to console.error and an internal audit-log entry — both invisible unless
+ * someone went looking for them (Vercel's log retention is an hour on the
+ * current plan, and there's no admin UI for the audit log). This is the
+ * only alerting for that failure path, so — unlike the purchase
+ * notification — it deliberately does NOT depend on that Gelato call having
+ * succeeded, and a failure to send it must never throw back into the
+ * caller's already-settled payment flow.
+ */
+async function sendGelatoFailureAlert({ orderId, items, customer, shippingAddress, error }) {
+  const adminEmail = process.env.ADMIN_EMAIL || 'michael.p.vanblerk@gmail.com';
+  const itemLines = items.map(a => `<li>${a.title} (id ${a.id}, product UID: ${a.gelatoProductUid || '—'})</li>`).join('');
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f9f6f1;font-family:'Courier New',monospace;font-size:13px;color:#1a1612;">
+  <div style="max-width:580px;margin:40px auto;background:#fff;border:1px solid rgba(26,22,18,0.12);">
+    <div style="background:#5a1a1a;padding:24px 32px;">
+      <p style="margin:0;font-family:Georgia,serif;font-size:22px;font-weight:300;color:#f9f6f1;letter-spacing:0.1em;text-transform:uppercase;">
+        Airlie Beach Art
+      </p>
+      <p style="margin:6px 0 0;font-size:11px;color:#e0a0a0;letter-spacing:0.15em;text-transform:uppercase;">
+        Gelato print order FAILED — Order ${orderId}
+      </p>
+    </div>
+    <div style="padding:32px;">
+      <div style="background:#fbeaea;border:1px solid #e0a0a0;padding:12px 16px;margin-bottom:24px;">
+        <p style="margin:0;font-size:12px;color:#5a1a1a;">
+          The customer was charged successfully, but the print job could NOT be submitted to Gelato.
+          You will need to place this print order manually.
+        </p>
+      </div>
+      <p style="margin:0 0 8px;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#b8965a;">Error</p>
+      <div style="padding:12px;background:#f9f6f1;border:1px solid #ede9e1;margin-bottom:24px;white-space:pre-wrap;word-break:break-word;">${error}</div>
+      <p style="margin:0 0 8px;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#b8965a;">Print items</p>
+      <ul style="margin:0 0 24px;padding-left:20px;">${itemLines}</ul>
+      <p style="margin:0 0 8px;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#b8965a;">Customer</p>
+      <p style="margin:0 0 24px;">
+        ${customer.firstName} ${customer.lastName} — <a href="mailto:${customer.email}">${customer.email}</a>${customer.phone ? ' — ' + customer.phone : ''}<br>
+        ${shippingAddress.address}, ${shippingAddress.city} ${shippingAddress.state} ${shippingAddress.postcode}, ${shippingAddress.countryCode}
+      </p>
+      <p style="margin:0;font-size:11px;color:#7a7368;line-height:1.7;">
+        Order ID ${orderId} — payment already confirmed by Square.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  return sendEmail({
+    to:      adminEmail,
+    subject: `⚠ Gelato order FAILED — ${orderId}`,
+    html,
+  });
 }
  
 /**
@@ -238,6 +314,16 @@ export default async function handler(req, res) {
   // Gelato print items require a valid destination country code to fulfil.
   if (cartSources.has('gelato') && !normalisedCountryCode) {
     return res.status(400).json({ success: false, error: 'A valid destination country is required for print orders.' });
+  }
+
+  // Gelato's shippingAddress schema also requires `state` — the checkout
+  // form's own JS (script.js validateForm) only makes the buyer fill it in
+  // for Australian addresses, so a non-AU Gelato order could otherwise reach
+  // here with an empty state and get silently dropped from the Gelato
+  // request later (JSON.stringify drops `undefined` values). Enforce it
+  // server-side for every Gelato order, regardless of destination country.
+  if (cartSources.has('gelato') && !isValidString(state)) {
+    return res.status(400).json({ success: false, error: 'A state/province is required for print orders.' });
   }
  
   // ── Validate + resolve postage quote(s) ────────────────────────────────
@@ -470,6 +556,13 @@ export default async function handler(req, res) {
             itemIds: gelatoPurchasedItems.map(a => a.id),
           },
         }).catch(() => {});
+        sendGelatoFailureAlert({
+          orderId,
+          items: gelatoPurchasedItems,
+          customer: { firstName, lastName, email, phone: phone || '' },
+          shippingAddress: { address, city, state, postcode, countryCode: normalisedCountryCode },
+          error: err.message,
+        }).catch(emailErr => console.error('Gelato failure alert email also failed:', emailErr));
       });
     }
  
