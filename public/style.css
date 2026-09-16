@@ -1346,7 +1346,7 @@ footer {
 .gelato-import-item {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
   width: 100%;
   padding: 8px 10px;
@@ -1360,7 +1360,15 @@ footer {
 }
 .gelato-import-item:last-child { border-bottom: none; }
 .gelato-import-item:hover { background: var(--parchment); }
-.gelato-import-item-title { font-size: 11px; color: var(--ink); }
+.gelato-import-item.selected { background: var(--parchment); box-shadow: inset 3px 0 0 var(--gold); }
+.gelato-import-item-thumb {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+.gelato-import-item-title { font-size: 11px; color: var(--ink); flex: 1; }
 .gelato-import-item-uid { font-size: 9px; color: var(--muted); white-space: nowrap; }
 
 /* ─── GELATO POSTAGE (checkout) — second result block ─────────────────────── */

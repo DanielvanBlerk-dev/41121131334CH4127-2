@@ -94,6 +94,9 @@ let editingId        = null;   // artwork id currently being edited in the add/e
 let newCollections    = [];    // working list of collection-name chips for the add/edit panel
 let existingImages    = [];    // (edit mode) image URLs currently on the record, minus any removed this session
 let removedImageUrls  = [];    // (edit mode) URLs staged for removal, sent as removeImageUrls on save
+let pendingGelatoPreviewUrl = null; // staged Gelato product preview image — set by clicking an "Import from
+                                     // Gelato" result, sent as gelatoPreviewUrl on save so the server can
+                                     // download it and use it as this listing's own photo (see paintings.js)
 
 // Public gallery collection filter — null means "All". Keyed by category
 // so the two galleries filter independently of each other.
@@ -910,6 +913,7 @@ function openAddPanel() {
   el('add-error').textContent = '';
   el('gelato-import-message').textContent = '';
   el('gelato-import-results').innerHTML   = '';
+  pendingGelatoPreviewUrl = null;
 
   updateListingTypeToggle();
 
@@ -961,6 +965,7 @@ function openEditPanel(art) {
   el('new-variant-label').value = art.variantLabel     || '';
   el('gelato-import-message').textContent = '';
   el('gelato-import-results').innerHTML   = '';
+  pendingGelatoPreviewUrl = null;
 
   updateListingTypeToggle();
 
@@ -982,6 +987,7 @@ function closeAddPanel() {
   el('add-panel').classList.remove('open');
   document.body.style.overflow = '';
   editingId = null;
+  pendingGelatoPreviewUrl = null;
 }
 
 function handleImgUpload(e) {
@@ -1007,6 +1013,14 @@ function handleImgUpload(e) {
  * Fetches Michael's connected Gelato store's product/variant list
  * (GET /api/paintings, admin-only) and renders it as a clickable list so
  * he can fill the Product UID field without copy-pasting it manually.
+ *
+ * Each result also shows a thumbnail when Gelato has a preview image for
+ * that product — clicking a result stages that image (in
+ * pendingGelatoPreviewUrl) alongside filling the UID/title fields, so
+ * saving the listing (add OR edit) has the server import that photo as
+ * the listing's own image (see paintings.js's gelatoPreviewUrl handling).
+ * A product with no preview image just fills the UID/title as before —
+ * manual photo upload remains available either way.
  *
  * If Gelato isn't configured (no GELATO_STORE_ID), the endpoint responds
  * with success: false and a message — per the graceful-degradation design
@@ -1042,6 +1056,16 @@ async function importFromGelato() {
       const item = document.createElement('button');
       item.type = 'button';
       item.className = 'gelato-import-item';
+
+      if (p.previewUrl) {
+        const thumb = document.createElement('img');
+        thumb.className = 'gelato-import-item-thumb';
+        thumb.src = p.previewUrl;
+        thumb.alt = '';
+        thumb.onerror = () => { thumb.style.display = 'none'; };
+        item.appendChild(thumb);
+      }
+
       const titleSpan = document.createElement('span');
       titleSpan.className = 'gelato-import-item-title';
       titleSpan.textContent = [p.productTitle, p.variantTitle].filter(Boolean).join(' — ') || 'Untitled product';
@@ -1056,6 +1080,13 @@ async function importFromGelato() {
         if (titleField && !titleField.value.trim()) {
           titleField.value = [p.productTitle, p.variantTitle].filter(Boolean).join(' — ');
         }
+
+        pendingGelatoPreviewUrl = p.previewUrl || null;
+        resultsEl.querySelectorAll('.gelato-import-item.selected').forEach(el2 => el2.classList.remove('selected'));
+        item.classList.add('selected');
+        msgEl.textContent = pendingGelatoPreviewUrl
+          ? '✓ Selected — this product’s photo will be imported as the listing’s image when you save.'
+          : '✓ Selected — Gelato has no preview photo for this product; upload one manually below.';
       });
       frag.appendChild(item);
     });
@@ -1126,6 +1157,12 @@ async function saveNewPainting() {
     body.gelatoProductUid = gelatoProductUid;
     body.printGroupId     = printGroupId;
     body.variantLabel     = variantLabel;
+    // If a result from "Import from Gelato" was clicked, its preview image
+    // (if any) rides along here — the server downloads it and uses it as
+    // this listing's photo (see paintings.js). Harmless to omit: a listing
+    // with no staged import just keeps whatever photos it already has, or
+    // none, same as before this feature existed.
+    if (pendingGelatoPreviewUrl) body.gelatoPreviewUrl = pendingGelatoPreviewUrl;
     // Weight/length/width/height are intentionally omitted — Gelato
     // handles its own print shipping regardless of size (Part 5.3).
   } else if (!oversized) {
@@ -1133,15 +1170,18 @@ async function saveNewPainting() {
   }
 
   let targetId;
+  let imageImportWarning = null;
   try {
     if (isEdit) {
       body.id              = editingId;
       body.removeImageUrls = removedImageUrls;
-      await apiFetch('/api/paintings', { method: 'PUT', body: JSON.stringify(body) });
+      const data = await apiFetch('/api/paintings', { method: 'PUT', body: JSON.stringify(body) });
       targetId = editingId;
+      imageImportWarning = data.imageImportWarning || null;
     } else {
       const data = await apiFetch('/api/paintings', { method: 'POST', body: JSON.stringify(body) });
       targetId = data.id;
+      imageImportWarning = data.imageImportWarning || null;
     }
   } catch (e) {
     errEl.textContent = e.message || 'Failed to save painting. Please try again.';
@@ -1165,8 +1205,16 @@ async function saveNewPainting() {
 
   await loadArtworks();
   renderGallery();
+  pendingGelatoPreviewUrl = null; // consumed (attempted) either way
 
-  if (failedImages.length === 0) {
+  const warnings = [];
+  if (imageImportWarning) warnings.push('Gelato photo import: ' + imageImportWarning);
+  if (failedImages.length > 0) {
+    const failList = failedImages.map(f => 'Image ' + f.index + ': ' + f.reason).join('\n');
+    warnings.push(failedImages.length + ' image(s) failed to upload:\n' + failList);
+  }
+
+  if (warnings.length === 0) {
     closeAddPanel();
     if (!isEdit) {
       setTimeout(() => {
@@ -1175,10 +1223,9 @@ async function saveNewPainting() {
       }, 200);
     }
   } else {
-    const failList = failedImages.map(f => 'Image ' + f.index + ': ' + f.reason).join('\n');
     errEl.textContent =
-      (isEdit ? 'Changes saved, but ' : 'Painting saved, but ') + failedImages.length + ' image(s) failed to upload:\n' + failList + '\n' +
-      (isEdit ? 'You can try adding them again from the edit panel.' : 'The painting has been added to your gallery. You can delete and re-add it to retry the images.');
+      (isEdit ? 'Changes saved, but:\n' : 'Painting saved, but:\n') + warnings.join('\n') + '\n' +
+      (isEdit ? 'You can try again from the edit panel.' : 'You can edit the painting to add photos.');
     btn.disabled = false; btn.textContent = savedLabel;
   }
 }
