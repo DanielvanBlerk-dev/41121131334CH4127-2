@@ -110,24 +110,30 @@ async function submitGelatoOrder({ orderId, items, shipmentMethodUid, customer, 
     orderReferenceId:    `airliebeachart-${orderId}`,
     customerReferenceId: customer.email,
     currency:            'AUD',
-    // NOTE: no `files` array per item. Every Gelato product we sell was
-    // imported from Michael's own Gelato Store (Ecommerce API), where the
-    // print-ready design is already registered against that productUid on
-    // Gelato's side — that's the whole point of a store product, vs. a raw
-    // catalog product ordered ad hoc. `art.images[0]` is the *listing
-    // photo* shown on the site (a photo of the painting), not a print file,
-    // and was previously being sent here as if it were one — a near-certain
-    // cause of Gelato rejecting the order outright. Gelato's own docs mark
-    // `files` as only conditionally required, consistent with it not being
-    // needed when the product already has a registered design. Not yet
-    // confirmed against a real order — if Gelato still rejects orders after
-    // this change, the failure-alert email below will now surface the real
-    // reason instead of failing silently.
-    items: items.map((art, i) => ({
-      itemReferenceId: `item-${i}-${art.id}`,
-      productUid:      art.gelatoProductUid,
-      quantity: 1,
-    })),
+    // `files` IS required per item, even for a product imported from
+    // Michael's own Gelato Store — CONFIRMED against a real order attempt
+    // (2026-09-16): Gelato rejected the order with
+    // "One or more print files are expected for productUid '...'"
+    // (items[0].files) when this was omitted. A store product registers the
+    // print specs (size/paper/material) but not a fixed design — the actual
+    // image to print is still supplied per order, same as Gelato's generic
+    // Print API. `art.images[0]` is the artwork's own listing photo — for a
+    // fine-art print reproduction that IS the design being printed, so this
+    // is the correct file, not a placeholder. If Gelato ever rejects a
+    // specific order over file resolution/dimensions instead of a missing
+    // file, the failure-alert email below will surface that distinctly.
+    items: items.map((art, i) => {
+      const fileUrl = art.images && art.images[0];
+      if (!fileUrl) throw new Error(`Artwork "${art.title}" (id ${art.id}) has no image to use as a print file.`);
+      return {
+        itemReferenceId: `item-${i}-${art.id}`,
+        productUid:      art.gelatoProductUid,
+        files: [
+          { type: 'default', url: fileUrl },
+        ],
+        quantity: 1,
+      };
+    }),
     shipmentMethodUid,
     shippingAddress: {
       firstName:    customer.firstName,
