@@ -140,12 +140,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 
   <!-- ── STYLES ─────────────────────────────────────────────────────────── -->
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=9">
 
   <!-- ── SQUARE + APP SCRIPTS ──────────────────────────────────────────── -->
   <script src="https://web.squarecdn.com/v1/square.js" defer></script>
   <script src="square-config.js?v=6" defer></script>
-  <script src="script.js?v=8" defer></script>
+  <script src="script.js?v=9" defer></script>
 
   <script>
     window.va = window.va || function () {
@@ -165,6 +165,7 @@
     </div>
     <div class="admin-bar-actions">
       <button class="admin-btn" id="admin-orders-btn">Orders</button>
+      <button class="admin-btn" id="admin-image-settings-btn">Image settings</button>
       <button class="admin-btn" id="admin-add-btn">+ Add painting</button>
       <button class="admin-btn danger" id="admin-logout-btn">Log out</button>
     </div>
@@ -229,6 +230,9 @@
           <input type="file" id="artist-photo-file" accept="image/*" class="file-input-hidden">
           <button class="about-photo-upload-btn" id="artist-photo-upload-btn">Change photo</button>
           <button class="about-photo-remove-btn" id="artist-photo-remove-btn">Remove</button>
+          <!-- Before/after compression size, e.g. "3.1 MB -> 280 KB (91% smaller)" —
+               populated by handleArtistPhotoUpload() in script.js. -->
+          <p class="image-compression-note" id="artist-photo-compression-note"></p>
         </div>
       </div>
       <div class="about-text">
@@ -691,6 +695,48 @@
   </div>
 
   <!--
+    ── IMAGE SETTINGS MODAL ─────────────────────────────────────────────────
+    Admin only, opened from the "Image settings" button in the admin bar.
+    Controls the upload-time resize/compress step that every photo upload
+    route (upload-image.js, update-artist-photo.js, and the Gelato-preview
+    import in paintings.js) runs through before storing a file in Vercel
+    Blob — see _imageSettings.js / _imageCompress.js. Built specifically
+    to keep Blob "Data Transfer" usage under control: smaller stored files
+    means less bandwidth every time a visitor views the gallery.
+    Applies to new uploads only — saving new settings here does not
+    retroactively touch photos already on the site.
+  -->
+  <div class="image-settings-overlay" id="image-settings-overlay" role="dialog" aria-modal="true" aria-label="Image settings">
+    <div class="image-settings-box">
+      <h2 class="image-settings-title">Image settings</h2>
+      <p class="image-settings-sub">Controls how new photos are resized and compressed before they're stored. This is what keeps Vercel's "Blob Data Transfer" usage down — smaller files mean less bandwidth every time someone views the gallery. Only affects photos uploaded from now on; nothing already on the site is touched.</p>
+
+      <div class="form-group-inline">
+        <input type="checkbox" id="img-settings-enabled">
+        <label for="img-settings-enabled" class="checkbox-label">Compress new uploads</label>
+      </div>
+
+      <div class="form-group">
+        <label for="img-settings-max-dimension">Max dimension (px)</label>
+        <input type="number" id="img-settings-max-dimension" min="400" max="6000" step="50">
+        <p class="field-helper">The longest edge a photo is resized to. Smaller photos are never enlarged — only re-compressed. 2000–2600px is a good range for a gallery photo.</p>
+      </div>
+
+      <div class="form-group">
+        <label for="img-settings-quality">Quality (%)</label>
+        <input type="number" id="img-settings-quality" min="30" max="100" step="1">
+        <p class="field-helper">Re-encode quality for JPEG/WEBP photos. Lower means smaller files but more visible compression. 80–85 is a good balance.</p>
+      </div>
+
+      <p class="image-settings-error" id="image-settings-error" role="alert"></p>
+      <p class="image-settings-success" id="image-settings-success" role="status"></p>
+
+      <button class="login-btn" id="image-settings-save-btn">Save settings</button>
+      <button class="login-cancel" id="image-settings-close-btn">Close</button>
+    </div>
+  </div>
+
+  <!--
     ── NEWSLETTER SIGNUP POPUP ─────────────────────────────────────────────
     Shown once per visitor (tracked via localStorage — see
     NEWSLETTER_SEEN_KEY in script.js) after a short delay, asking for name
@@ -925,6 +971,12 @@
         <label for="new-sold" class="checkbox-label">Mark as sold</label>
       </div>
       <p id="add-error" class="add-error" role="alert"></p>
+      <!-- Shows a before/after size summary once photo uploads finish, e.g.
+           "Images compressed: 12.4 MB -> 1.1 MB (91% smaller)". Populated
+           by saveNewPainting() in script.js from each upload response's
+           originalBytes/finalBytes — see _imageCompress.js. Purely
+           informational, separate from add-error's error styling. -->
+      <p id="image-compression-note" class="field-helper"></p>
     </div>
     <div class="add-panel-footer">
       <button class="save-btn" id="save-painting-btn">Save painting to gallery</button>

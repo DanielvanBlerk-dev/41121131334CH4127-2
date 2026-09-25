@@ -528,6 +528,33 @@ nav {
   text-transform: uppercase; color: var(--muted); padding: 8px;
 }
 
+/* ─── IMAGE SETTINGS MODAL ────────────────────────────────────────────────── */
+.image-settings-overlay {
+  position: fixed; inset: 0; z-index: 500; background: rgba(26,22,18,0.7);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.25s;
+  padding: 1.5rem;
+}
+.image-settings-overlay.open { opacity: 1; pointer-events: all; }
+.image-settings-box {
+  background: var(--warm-white); width: 100%; max-width: 440px;
+  border: 1px solid var(--border); padding: 2.5rem;
+  max-height: 90vh; overflow-y: auto;
+  transform: translateY(12px); transition: transform 0.25s;
+}
+.image-settings-overlay.open .image-settings-box { transform: translateY(0); }
+.image-settings-title { font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 300; margin-bottom: 0.5rem; }
+.image-settings-sub   { font-size: 11px; color: var(--muted); line-height: 1.7; margin-bottom: 1.5rem; }
+.image-settings-error   { color: #c0392b; font-size: 11px; margin-top: 8px; min-height: 16px; }
+.image-settings-success { color: #3d7a4d; font-size: 11px; margin-top: 8px; min-height: 16px; }
+
+/* Before/after size note shown after a photo upload completes — used in
+   both the add/edit painting panel (#image-compression-note) and next to
+   the artist-photo upload button (#artist-photo-compression-note). */
+.image-compression-note {
+  font-size: 10px; color: var(--gold); line-height: 1.6; margin-top: 6px;
+}
+
 /* ─── NEWSLETTER SIGNUP POPUP ─────────────────────────────────────────────── */
 .newsletter-overlay {
   position: fixed; inset: 0; z-index: 550; background: rgba(26,22,18,0.7);

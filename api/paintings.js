@@ -6,6 +6,8 @@ import { getIp } from './_rateLimit.js';
 import { auditLog } from './_auditLog.js';
 import { checkCsrf } from './_csrf.js';
 import { checkBodySize } from './_bodyLimit.js';
+import { getImageSettings, saveImageSettings, validateImageSettings } from './_imageSettings.js';
+import { compressImage } from './_imageCompress.js';
 
 const redis = new Redis({
   url:   process.env.UPSTASH_REDIS_REST_URL,
@@ -104,11 +106,30 @@ async function importGelatoPreviewImage(sourceUrl) {
     return { ok: false, error: 'Gelato’s preview image is too large (over 4MB).' };
   }
 
-  const ext = contentType.split('/')[1]?.split(';')[0] || 'jpg';
+  // ── Compress (or pass through) ───────────────────────────────────────
+  // Same pipeline the manual upload routes use (upload-image.js,
+  // update-artist-photo.js) and the same admin-controlled settings — a
+  // Gelato-imported preview is still a photo that gets served to every
+  // gallery visitor, so it counts toward Blob Data Transfer exactly like
+  // a hand-uploaded one and should be sized the same way.
+  let uploadBuffer = buffer, uploadContentType = contentType, ext = contentType.split('/')[1]?.split(';')[0] || 'jpg';
+  const settings = await getImageSettings();
+  if (settings.enabled) {
+    const dataUri = `data:${contentType};base64,${buffer.toString('base64')}`;
+    const compressed = await compressImage(dataUri, settings);
+    if (compressed.ok) {
+      uploadBuffer      = compressed.buffer;
+      uploadContentType = compressed.mimeType;
+      ext               = compressed.ext;
+    } else {
+      console.error('Compression failed for Gelato preview import — storing original:', compressed.error);
+    }
+  }
+
   const pathname = `artworks/gelato-import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
   try {
-    const blob = await put(pathname, buffer, { access: 'public', contentType });
+    const blob = await put(pathname, uploadBuffer, { access: 'public', contentType: uploadContentType });
     return { ok: true, url: blob.url };
   } catch (err) {
     console.error('Gelato preview image blob upload error:', err);
@@ -295,8 +316,18 @@ export default async function handler(req, res) {
 
   switch (req.method) {
 
-    // ── GET — fetch Gelato store products for import ────────────────────
+    // ── GET — fetch Gelato store products for import, or image settings ──
+    // ?action=image-settings returns the admin's current upload-time
+    // compression settings (see _imageSettings.js) for the Image Settings
+    // panel in script.js. Anything else (the default — no query string)
+    // keeps the existing Gelato product-import behaviour unchanged, so
+    // this stays backward compatible with every existing caller.
     case 'GET': {
+      if (req.query?.action === 'image-settings') {
+        const settings = await getImageSettings();
+        return res.status(200).json({ success: true, settings });
+      }
+
       const result = await fetchGelatoStoreProducts();
       if (!result.ok) {
         // Not configured / unreachable — return gracefully, never a hard error.
@@ -646,7 +677,23 @@ export default async function handler(req, res) {
 
     // ── PATCH — toggle sold status (default), or reorder (Task 4) ────────
     case 'PATCH': {
-      const { action, id, order } = req.body || {};
+      const { action, id, order, enabled, maxDimension, quality } = req.body || {};
+
+      // ── Update image compression settings ─────────────────────────────
+      // Body: { action: 'update-image-settings', enabled, maxDimension,
+      // quality } — see _imageSettings.js for what each field means and
+      // its valid range. Takes effect on the very next upload through any
+      // route (upload-image.js, update-artist-photo.js, the Gelato-preview
+      // import above) — no redeploy needed.
+      if (action === 'update-image-settings') {
+        const validated = validateImageSettings({ enabled, maxDimension, quality });
+        if (!validated.ok) {
+          return res.status(400).json({ success: false, error: validated.error });
+        }
+        await saveImageSettings(validated.value);
+        await auditLog({ action: 'update_image_settings', ip, detail: validated.value });
+        return res.status(200).json({ success: true, settings: validated.value });
+      }
 
       // ── Reorder — admin drag-and-drop within one gallery section ─────
       // `order` is an array of artwork ids in their new top-to-bottom

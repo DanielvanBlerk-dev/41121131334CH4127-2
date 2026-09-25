@@ -114,6 +114,18 @@ function el(id) {
   return element;
 }
 
+/**
+ * Formats a byte count as a short human-readable string (e.g. "1.1 MB",
+ * "340 KB"). Used to show admins the before/after effect of upload-time
+ * image compression — see _imageCompress.js and the Image Settings panel.
+ */
+function formatBytes(bytes) {
+  if (!Number.isFinite(bytes)) return '';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
 /* ─── API HELPERS ─────────────────────────────────────────────────────────── */
 async function apiFetch(path, options = {}) {
   const token = getToken();
@@ -196,6 +208,14 @@ async function handleArtistPhotoUpload(e) {
       });
       artistPhoto = data.imgUrl || ev.target.result;
       renderArtistPhoto();
+      const noteEl = el('artist-photo-compression-note');
+      if (typeof data.originalBytes === 'number' && typeof data.finalBytes === 'number' && data.originalBytes > 0) {
+        const pct = Math.round((1 - data.finalBytes / data.originalBytes) * 100);
+        noteEl.textContent = formatBytes(data.originalBytes) + ' → ' + formatBytes(data.finalBytes) +
+          (pct > 0 ? ' (' + pct + '% smaller)' : '');
+      } else if (noteEl) {
+        noteEl.textContent = '';
+      }
     } catch (err) {
       alert('Failed to upload photo. Please try again.');
       console.error(err);
@@ -929,6 +949,7 @@ function openAddPanel() {
   el('gelato-import-message').textContent = '';
   el('gelato-import-results').innerHTML   = '';
   el('original-print-sold-note').textContent = '';
+  el('image-compression-note').textContent = '';
   pendingGelatoPreviewUrl = null;
 
   updateListingTypeToggle();
@@ -988,6 +1009,7 @@ function openEditPanel(art) {
   el('new-stock-limit').value = art.stockLimit != null ? art.stockLimit : '';
   el('original-print-sold-note').textContent =
     art.source === 'original-print' ? ((art.stockSold || 0) + ' of ' + (art.stockLimit != null ? art.stockLimit : '?') + ' sold so far.') : '';
+  el('image-compression-note').textContent = '';
 
   updateListingTypeToggle();
 
@@ -1010,6 +1032,7 @@ function closeAddPanel() {
   document.body.style.overflow = '';
   editingId = null;
   pendingGelatoPreviewUrl = null;
+  el('image-compression-note').textContent = '';
 }
 
 function handleImgUpload(e) {
@@ -1223,13 +1246,19 @@ async function saveNewPainting() {
 
   const total = newImgDataArray.length;
   const failedImages = [];
+  let totalOriginalBytes = 0, totalFinalBytes = 0, compressedCount = 0;
   for (let i = 0; i < total; i++) {
     btn.textContent = 'Uploading image ' + (i + 1) + ' of ' + total + '…';
     try {
-      await apiFetch('/api/upload-image', {
+      const data = await apiFetch('/api/upload-image', {
         method: 'POST',
         body:   JSON.stringify({ artworkId: targetId, imgData: newImgDataArray[i], index: i }),
       });
+      if (typeof data.originalBytes === 'number' && typeof data.finalBytes === 'number') {
+        totalOriginalBytes += data.originalBytes;
+        totalFinalBytes    += data.finalBytes;
+        compressedCount++;
+      }
     } catch (e) {
       failedImages.push({ index: i + 1, reason: e.message || 'Unknown error' });
       console.error('Image ' + (i + 1) + ' upload failed:', e);
@@ -1240,6 +1269,18 @@ async function saveNewPainting() {
   renderGallery();
   pendingGelatoPreviewUrl = null; // consumed (attempted) either way
 
+  // Before/after summary from upload-time compression (see
+  // _imageCompress.js and the Image Settings panel) — purely
+  // informational, shown separately from any error/warning text.
+  const noteEl = el('image-compression-note');
+  if (compressedCount > 0 && totalOriginalBytes > 0) {
+    const pct = Math.round((1 - totalFinalBytes / totalOriginalBytes) * 100);
+    noteEl.textContent = 'Images optimised: ' + formatBytes(totalOriginalBytes) + ' → ' + formatBytes(totalFinalBytes) +
+      (pct > 0 ? ' (' + pct + '% smaller)' : '');
+  } else {
+    noteEl.textContent = '';
+  }
+
   const warnings = [];
   if (imageImportWarning) warnings.push('Gelato photo import: ' + imageImportWarning);
   if (failedImages.length > 0) {
@@ -1248,13 +1289,19 @@ async function saveNewPainting() {
   }
 
   if (warnings.length === 0) {
-    closeAddPanel();
-    if (!isEdit) {
-      setTimeout(() => {
-        const card = document.getElementById('card-' + targetId);
-        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 200);
-    }
+    // Brief pause so the admin actually sees the compression summary (and
+    // the "Save painting" -> done transition) before the panel closes,
+    // rather than it flashing and disappearing immediately.
+    btn.textContent = 'Saved ✓';
+    setTimeout(() => {
+      closeAddPanel();
+      if (!isEdit) {
+        setTimeout(() => {
+          const card = document.getElementById('card-' + targetId);
+          if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 200);
+      }
+    }, noteEl.textContent ? 1200 : 0);
   } else {
     errEl.textContent =
       (isEdit ? 'Changes saved, but:\n' : 'Painting saved, but:\n') + warnings.join('\n') + '\n' +
@@ -1423,6 +1470,61 @@ async function openOrders() {
 function closeOrders() {
   el('orders-panel').classList.remove('open');
   document.body.style.overflow = '';
+}
+
+/* ─── IMAGE SETTINGS PANEL ────────────────────────────────────────────────── */
+/**
+ * Opens the Image Settings modal and loads the admin's current
+ * compression settings from the server (see GET /api/paintings
+ * ?action=image-settings in paintings.js) so the fields reflect what's
+ * actually saved, not stale defaults.
+ */
+async function openImageSettingsPanel() {
+  el('image-settings-overlay').classList.add('open');
+  el('image-settings-error').textContent   = '';
+  el('image-settings-success').textContent = '';
+  try {
+    const data = await apiFetch('/api/paintings?action=image-settings');
+    const s = data.settings || {};
+    el('img-settings-enabled').checked        = s.enabled !== false;
+    el('img-settings-max-dimension').value    = s.maxDimension != null ? s.maxDimension : 2400;
+    el('img-settings-quality').value          = s.quality != null ? s.quality : 82;
+  } catch (e) {
+    el('image-settings-error').textContent = e.message || 'Failed to load image settings.';
+  }
+}
+function closeImageSettingsPanel() {
+  el('image-settings-overlay').classList.remove('open');
+}
+
+/**
+ * Saves the Image Settings form via PATCH /api/paintings
+ * { action: 'update-image-settings', ... } — takes effect on the very
+ * next upload through any route, no redeploy needed (see
+ * _imageSettings.js / _imageCompress.js).
+ */
+async function saveImageSettingsFromPanel() {
+  const errEl  = el('image-settings-error');
+  const succEl = el('image-settings-success');
+  errEl.textContent = ''; succEl.textContent = '';
+
+  const enabled      = el('img-settings-enabled').checked;
+  const maxDimension = parseInt(el('img-settings-max-dimension').value, 10);
+  const quality       = parseInt(el('img-settings-quality').value, 10);
+
+  const btn = el('image-settings-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await apiFetch('/api/paintings', {
+      method: 'PATCH',
+      body:   JSON.stringify({ action: 'update-image-settings', enabled, maxDimension, quality }),
+    });
+    succEl.textContent = 'Saved — applies to new uploads from now on.';
+  } catch (e) {
+    errEl.textContent = e.message || 'Failed to save image settings.';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save settings';
+  }
 }
 
 async function renderOrders() {
@@ -2097,6 +2199,9 @@ document.addEventListener('DOMContentLoaded', function() {
   wire('admin-add-btn',          'click', openAddPanel);
   wire('admin-logout-btn',       'click', adminLogout);
   wire('orders-close-btn',       'click', closeOrders);
+  wire('admin-image-settings-btn', 'click', openImageSettingsPanel);
+  wire('image-settings-close-btn', 'click', closeImageSettingsPanel);
+  wire('image-settings-save-btn',  'click', saveImageSettingsFromPanel);
   wire('artist-photo-upload-btn','click', function() { el('artist-photo-file').click(); });
   wire('artist-photo-file',      'change', handleArtistPhotoUpload);
   wire('artist-photo-remove-btn','click', removeArtistPhoto);

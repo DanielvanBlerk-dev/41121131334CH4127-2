@@ -6,6 +6,8 @@ import { checkBodySize } from './_bodyLimit.js';
 import { validateImage } from './_imageValidator.js';
 import { getIp } from './_rateLimit.js';
 import { auditLog } from './_auditLog.js';
+import { getImageSettings } from './_imageSettings.js';
+import { compressImage } from './_imageCompress.js';
 
 const redis = new Redis({
   url:   process.env.UPSTASH_REDIS_REST_URL,
@@ -13,12 +15,28 @@ const redis = new Redis({
 });
 
 /**
+ * Decodes a base64 data URI to a Buffer + mime type, with no resizing or
+ * re-encoding. Used when compression is switched off in the admin panel,
+ * and as the fallback if compressImage() itself fails — an upload should
+ * never be blocked by a compression bug, only fall back to the original.
+ */
+function bufferFromImgData(imgData) {
+  const base64    = imgData.includes(',') ? imgData.split(',')[1] : imgData;
+  const buffer    = Buffer.from(base64, 'base64');
+  const mimeMatch = imgData.match(/^data:([^;]+);base64,/);
+  const mimeType  = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+  return { buffer, mimeType };
+}
+
+/**
  * POST /api/update-artist-photo
  * Admin only.
  * Body: { imgData } — base64 data URI of the artist photo.
  *
- * Image is validated server-side, uploaded to Vercel Blob CDN,
- * and the resulting URL stored in Redis under 'artist-photo-url'.
+ * Image is validated server-side, then run through the same upload-time
+ * compression as artwork photos (see _imageCompress.js / _imageSettings.js
+ * — the admin's Image Settings panel controls both), uploaded to Vercel
+ * Blob CDN, and the resulting URL stored in Redis under 'artist-photo-url'.
  * The old blob is deleted before the new one is uploaded.
  *
  * DELETE /api/update-artist-photo
@@ -80,16 +98,43 @@ export default async function handler(req, res) {
       try { await del(existingUrl); } catch (e) { console.warn('old blob delete failed:', e.message); }
     }
 
-    // Upload to Vercel Blob
-    const ext      = imgCheck.format.split('/')[1] || 'jpg';
-    const base64   = imgData.includes(',') ? imgData.split(',')[1] : imgData;
-    const buffer   = Buffer.from(base64, 'base64');
-    const mimeMatch = imgData.match(/^data:([^;]+);base64,/);
-    const mimeType  = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    // ── Compress (or pass through) ───────────────────────────────────────
+    const settings = await getImageSettings();
+    let uploadBuffer, uploadMime, uploadExt, originalBytes, finalBytes, compressionNote = null;
 
-    const blob = await put(`artist/photo.${ext}`, buffer, {
+    if (settings.enabled) {
+      const compressed = await compressImage(imgData, settings);
+      if (compressed.ok) {
+        uploadBuffer  = compressed.buffer;
+        uploadMime    = compressed.mimeType;
+        uploadExt     = compressed.ext;
+        originalBytes = compressed.originalBytes;
+        finalBytes    = compressed.finalBytes;
+        compressionNote = compressed.skipped || null;
+      } else {
+        console.error('Compression failed for artist photo — storing original:', compressed.error);
+        const fallback = bufferFromImgData(imgData);
+        uploadBuffer  = fallback.buffer;
+        uploadMime    = fallback.mimeType;
+        uploadExt     = imgCheck.format.split('/')[1] || 'jpg';
+        originalBytes = fallback.buffer.length;
+        finalBytes    = fallback.buffer.length;
+        compressionNote = `compression failed, stored original: ${compressed.error}`;
+      }
+    } else {
+      const fallback = bufferFromImgData(imgData);
+      uploadBuffer  = fallback.buffer;
+      uploadMime    = fallback.mimeType;
+      uploadExt     = imgCheck.format.split('/')[1] || 'jpg';
+      originalBytes = fallback.buffer.length;
+      finalBytes    = fallback.buffer.length;
+    }
+
+    // Upload to Vercel Blob — extension reflects whatever format the
+    // photo was actually stored as (see _imageCompress.js).
+    const blob = await put(`artist/photo.${uploadExt}`, uploadBuffer, {
       access:          'public',
-      contentType:     mimeType,
+      contentType:     uploadMime,
       addRandomSuffix: true, // ensures cache busting when photo is updated
     });
 
@@ -97,8 +142,12 @@ export default async function handler(req, res) {
     await redis.set('artist-photo-url', blob.url);
     await redis.del('artist-photo'); // clear any legacy base64
 
-    await auditLog({ action: 'artist_photo_updated', ip, detail: { url: blob.url } });
-    return res.status(200).json({ success: true, imgUrl: blob.url });
+    await auditLog({
+      action: 'artist_photo_updated',
+      ip,
+      detail: { url: blob.url, compressed: settings.enabled, originalBytes, finalBytes, compressionNote },
+    });
+    return res.status(200).json({ success: true, imgUrl: blob.url, originalBytes, finalBytes });
 
   } catch (err) {
     console.error('update-artist-photo error:', err);

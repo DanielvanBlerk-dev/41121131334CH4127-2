@@ -6,6 +6,8 @@ import { auditLog } from './_auditLog.js';
 import { checkCsrf } from './_csrf.js';
 import { checkBodySize } from './_bodyLimit.js';
 import { validateImage } from './_imageValidator.js';
+import { getImageSettings } from './_imageSettings.js';
+import { compressImage } from './_imageCompress.js';
 
 const redis = new Redis({
   url:   process.env.UPSTASH_REDIS_REST_URL,
@@ -13,21 +15,31 @@ const redis = new Redis({
 });
 
 /**
- * Uploads a validated base64 image to Vercel Blob.
- * Returns the public CDN URL.
+ * Decodes a base64 data URI to a Buffer + mime type, with no resizing or
+ * re-encoding — the pre-compression-feature behaviour. Used as the upload
+ * path when compression is switched off in the admin panel, and as the
+ * fallback if compressImage() itself fails for some reason (a corrupt or
+ * unusual file sharp can't parse, say) — an upload should never be blocked
+ * by a compression bug, it should just fall back to storing the original.
  */
-async function uploadToBlob(imgData, filename) {
+function bufferFromImgData(imgData) {
   const base64    = imgData.includes(',') ? imgData.split(',')[1] : imgData;
   const buffer    = Buffer.from(base64, 'base64');
   const mimeMatch = imgData.match(/^data:([^;]+);base64,/);
   const mimeType  = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+  return { buffer, mimeType };
+}
 
+/**
+ * Uploads an already-decoded buffer to Vercel Blob. Returns the public
+ * CDN URL.
+ */
+async function putBufferToBlob(buffer, mimeType, filename) {
   const blob = await put(filename, buffer, {
     access:          'public',
     contentType:     mimeType,
     addRandomSuffix: false,
   });
-
   return blob.url;
 }
 
@@ -53,6 +65,20 @@ async function deleteBlob(url) {
  *   the 4MB per-image limit applies cleanly, and there is no total-payload
  *   problem regardless of how many images a painting has.
  *
+ * Compression (new):
+ *   Before the image is stored, it's run through compressImage() (see
+ *   _imageCompress.js) using the admin's current settings from
+ *   _imageSettings.js — resized down to a max dimension and re-encoded at
+ *   a set quality. This is what keeps Vercel Blob's "Data Transfer" usage
+ *   under control: that quota bills the bytes actually served to visitors,
+ *   so a smaller stored file directly means less usage every time someone
+ *   views the gallery. The admin can adjust or switch this off entirely
+ *   from the Image Settings panel — see paintings.js's GET/PATCH
+ *   'image-settings' handling and the admin UI in script.js.
+ *   If compression is switched off, or if it fails for any reason, the
+ *   original file is stored untouched — a compression bug should never be
+ *   able to block an upload.
+ *
  * Request body:
  *   {
  *     artworkId: number,   — ID of the existing artwork to attach the image to
@@ -63,7 +89,7 @@ async function deleteBlob(url) {
  *   }
  *
  * Response (success):
- *   { success: true, imgUrl: string }
+ *   { success: true, imgUrl: string, originalBytes: number, finalBytes: number }
  *
  * Response (error):
  *   { success: false, error: string }
@@ -134,16 +160,52 @@ export default async function handler(req, res) {
     return res.status(400).json({ success: false, error: 'Maximum of 10 images per painting reached.' });
   }
 
+  // ── Compress (or pass through) ─────────────────────────────────────────
+  const settings = await getImageSettings();
+  let uploadBuffer, uploadMime, uploadExt, originalBytes, finalBytes, compressionNote = null;
+
+  if (settings.enabled) {
+    const compressed = await compressImage(imgData, settings);
+    if (compressed.ok) {
+      uploadBuffer  = compressed.buffer;
+      uploadMime    = compressed.mimeType;
+      uploadExt     = compressed.ext;
+      originalBytes = compressed.originalBytes;
+      finalBytes    = compressed.finalBytes;
+      compressionNote = compressed.skipped || null;
+    } else {
+      // Never let a compression failure block the upload — store the
+      // original instead, and note why in the audit log.
+      console.error('Compression failed for artwork', numId, '— storing original:', compressed.error);
+      const fallback = bufferFromImgData(imgData);
+      uploadBuffer  = fallback.buffer;
+      uploadMime    = fallback.mimeType;
+      uploadExt     = imgCheck.format.split('/')[1] || 'jpg';
+      originalBytes = fallback.buffer.length;
+      finalBytes    = fallback.buffer.length;
+      compressionNote = `compression failed, stored original: ${compressed.error}`;
+    }
+  } else {
+    const fallback = bufferFromImgData(imgData);
+    uploadBuffer  = fallback.buffer;
+    uploadMime    = fallback.mimeType;
+    uploadExt     = imgCheck.format.split('/')[1] || 'jpg';
+    originalBytes = fallback.buffer.length;
+    finalBytes    = fallback.buffer.length;
+  }
+
   // ── Upload to Vercel Blob ─────────────────────────────────────────────
   // Filename: paintings/painting-{artworkId}-{timestamp}-{index}.{ext}
   // Using Date.now() in the filename ensures no collision even if the
-  // client sends multiple images with the same index value.
-  const ext      = imgCheck.format.split('/')[1] || 'jpg';
-  const filename = `paintings/painting-${numId}-${Date.now()}-${index}.${ext}`;
+  // client sends multiple images with the same index value. The extension
+  // reflects whatever format the image was actually stored as, which may
+  // differ from the upload's original format (e.g. a flattened PNG stored
+  // as .jpg) — see _imageCompress.js.
+  const filename = `paintings/painting-${numId}-${Date.now()}-${index}.${uploadExt}`;
 
   let imgUrl;
   try {
-    imgUrl = await uploadToBlob(imgData, filename);
+    imgUrl = await putBufferToBlob(uploadBuffer, uploadMime, filename);
   } catch (blobErr) {
     console.error('Blob upload failed:', blobErr);
     return res.status(500).json({ success: false, error: 'Image upload failed. Please try again.' });
@@ -176,7 +238,14 @@ export default async function handler(req, res) {
   freshArtworks[freshIdx].imgData = null;  // never store base64
 
   await redis.set('artworks', freshArtworks);
-  await auditLog({ action: 'image_uploaded', ip, detail: { artworkId: numId, imgUrl, totalImages: freshArtworks[freshIdx].images.length } });
+  await auditLog({
+    action: 'image_uploaded',
+    ip,
+    detail: {
+      artworkId: numId, imgUrl, totalImages: freshArtworks[freshIdx].images.length,
+      compressed: settings.enabled, originalBytes, finalBytes, compressionNote,
+    },
+  });
 
-  return res.status(200).json({ success: true, imgUrl });
+  return res.status(200).json({ success: true, imgUrl, originalBytes, finalBytes });
 }
