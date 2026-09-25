@@ -2120,10 +2120,11 @@ document.addEventListener('DOMContentLoaded', function() {
   wire('lightbox-next',          'click', lightboxNext);
   wire('lightbox-overlay',       'click', function(e) { if (e.target === el('lightbox-overlay')) closeLightbox(); });
 
-  // Listing type — toggles shipping-dimensions / Gelato-fields visibility (admin panel)
-  wire('listing-type-original', 'change', updateListingTypeToggle);
-  wire('listing-type-oversized', 'change', updateListingTypeToggle);
-  wire('listing-type-gelato',   'change', updateListingTypeToggle);
+  // Listing type — toggles shipping-dimensions / Gelato-fields / Original-Print-fields visibility (admin panel)
+  wire('listing-type-original',       'change', updateListingTypeToggle);
+  wire('listing-type-oversized',      'change', updateListingTypeToggle);
+  wire('listing-type-gelato',         'change', updateListingTypeToggle);
+  wire('listing-type-original-print', 'change', updateListingTypeToggle);
   wire('gelato-import-btn',     'click',  importFromGelato);
 
   // Collections tag input (add/edit panel)
