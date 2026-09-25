@@ -226,11 +226,28 @@ async function fetchGelatoStoreProducts() {
  *                  Defaults to [] when absent.
  *
  * Listing types (via the `source` and `oversized` fields):
- *   source: 'original', oversized: false  → standard painting, AusPost shipping
- *   source: 'original', oversized: true   → freight/contact-artist listing
- *   source: 'gelato',   oversized: false  → print-on-demand listing, fulfilled
- *                                            and shipped by Gelato — no AusPost
- *                                            shipping dimensions needed
+ *   source: 'original',       oversized: false → standard painting, AusPost shipping
+ *   source: 'original',       oversized: true  → freight/contact-artist listing
+ *   source: 'gelato',         oversized: false → print-on-demand listing, fulfilled
+ *                                                 and shipped by Gelato — no AusPost
+ *                                                 shipping dimensions needed, unlimited
+ *                                                 (never auto-marked sold by a purchase)
+ *   source: 'original-print', oversized: false → fixed, limited print run, fulfilled
+ *                                                 manually and shipped via AusPost like
+ *                                                 a standard listing, but with a fixed
+ *                                                 `stockLimit`. See stock fields below.
+ *
+ * Original Print stock fields:
+ *   stockLimit — admin-set total copies available for this listing (positive
+ *                integer). Required, and editable later (raising the run size,
+ *                for instance), but can never be edited below stockSold.
+ *   stockSold  — running count of copies actually purchased through checkout.
+ *                NOT admin-editable directly — it only ever increments, in
+ *                create-payment.js, after a successful payment. Once
+ *                stockSold reaches stockLimit the listing is automatically
+ *                flipped to sold/unavailable — no manual flipping needed per
+ *                sale (this is what distinguishes it from a Gelato print,
+ *                which is unlimited/print-on-demand and never auto-sells-out).
  *
  * Gelato print listings additionally carry:
  *   gelatoProductUid — the Gelato product/variant UID used to submit the
@@ -302,6 +319,7 @@ export default async function handler(req, res) {
         collections      = [],
         weight, length, width, height,
         gelatoPreviewUrl = null,
+        stockLimit       = null,
       } = req.body || {};
 
       // ── Validate text fields ────────────────────────────────────────
@@ -311,7 +329,7 @@ export default async function handler(req, res) {
       if (!['seascape', 'figurative'].includes(category)) {
         return res.status(400).json({ success: false, error: 'Invalid category. Must be seascape or figurative.' });
       }
-      if (!['original', 'gelato'].includes(source)) {
+      if (!['original', 'gelato', 'original-print'].includes(source)) {
         return res.status(400).json({ success: false, error: 'Invalid listing source.' });
       }
 
@@ -352,7 +370,21 @@ export default async function handler(req, res) {
         };
       }
 
+      // ── Original Print stock fields ──────────────────────────────────
+      // A brand-new listing always starts at stockSold: 0 — stockSold only
+      // ever increments later, from create-payment.js after a real sale.
+      let stockFields = { stockLimit: null, stockSold: 0 };
+      if (source === 'original-print') {
+        const parsedLimit = parseInt(stockLimit, 10);
+        if (!Number.isFinite(parsedLimit) || parsedLimit < 1 || parsedLimit > 100000) {
+          return res.status(400).json({ success: false, error: 'A stock quantity of 1 or more is required for Original Print listings.' });
+        }
+        stockFields = { stockLimit: parsedLimit, stockSold: 0 };
+      }
+
       // ── Shipping dimensions — only for standard (non-oversized, non-Gelato) ─
+      // Original Print listings ship exactly like a standard Original via
+      // AusPost, so they go through this same block (only Gelato is excluded).
       let shipping = null;
       if (!isOversized && source !== 'gelato') {
         for (const [key, val] of Object.entries({ weight, length, width, height })) {
@@ -404,6 +436,7 @@ export default async function handler(req, res) {
         source,
         collections: collVal.value,
         ...gelatoFields,
+        ...stockFields,
         images:  importedImageUrl ? [importedImageUrl] : [],
         imgUrl:  null,
         imgData: null,
@@ -411,7 +444,7 @@ export default async function handler(req, res) {
         shipping,
       });
       await redis.set('artworks', artworks);
-      await auditLog({ action: 'add_painting', ip, detail: { id, title: sanitizeString(title), price, source, oversized: isOversized, importedGelatoImage: !!importedImageUrl } });
+      await auditLog({ action: 'add_painting', ip, detail: { id, title: sanitizeString(title), price, source, oversized: isOversized, stockLimit: stockFields.stockLimit, importedGelatoImage: !!importedImageUrl } });
 
       return res.status(200).json({ success: true, id, ...(importWarning ? { imageImportWarning: importWarning } : {}) });
     }
@@ -429,13 +462,14 @@ export default async function handler(req, res) {
         collections      = [],
         weight, length, width, height,
         gelatoPreviewUrl = null,
+        stockLimit       = null,
       } = req.body || {};
 
       // ── Validate text fields ────────────────────────────────────────
       if (!id || !isValidString(title) || !isValidString(medium) || typeof price !== 'number' || price < 0) {
         return res.status(400).json({ success: false, error: 'Invalid artwork data.' });
       }
-      if (!['original', 'gelato'].includes(source)) {
+      if (!['original', 'gelato', 'original-print'].includes(source)) {
         return res.status(400).json({ success: false, error: 'Invalid listing source.' });
       }
 
@@ -499,6 +533,31 @@ export default async function handler(req, res) {
       const numId  = Number(id);
       const idx    = artworks.findIndex(a => Number(a.id) === numId);
       if (idx === -1) return res.status(404).json({ success: false, error: 'Artwork not found.' });
+      const existingForStock = artworks[idx];
+
+      // ── Original Print stock fields ──────────────────────────────────
+      // stockSold carries over from the existing record — it's never reset
+      // by an edit, only ever incremented by create-payment.js after a real
+      // sale. The admin can raise (or lower, down to what's already sold)
+      // stockLimit here; lowering it below stockSold is rejected outright
+      // rather than silently clamped, since that would misrepresent how
+      // many copies have actually been sold.
+      let stockFields = { stockLimit: null, stockSold: 0 };
+      let autoSoldOut = false;
+      if (source === 'original-print') {
+        const parsedLimit = parseInt(stockLimit, 10);
+        if (!Number.isFinite(parsedLimit) || parsedLimit < 1 || parsedLimit > 100000) {
+          return res.status(400).json({ success: false, error: 'A stock quantity of 1 or more is required for Original Print listings.' });
+        }
+        const currentSold = existingForStock.source === 'original-print' && typeof existingForStock.stockSold === 'number'
+          ? existingForStock.stockSold
+          : 0;
+        if (parsedLimit < currentSold) {
+          return res.status(400).json({ success: false, error: `Stock quantity can't be set below the ${currentSold} already sold.` });
+        }
+        stockFields = { stockLimit: parsedLimit, stockSold: currentSold };
+        autoSoldOut = currentSold >= parsedLimit;
+      }
 
       // ── Normalise images[] ────────────────────────────────────────────
       const existing     = artworks[idx];
@@ -543,11 +602,16 @@ export default async function handler(req, res) {
         title:       sanitizeString(title),
         medium:      sanitizeString(medium),
         price,
-        sold:        Boolean(sold),
+        // Auto-sold-out (source === 'original-print' and every copy is
+        // already accounted for) always wins over an admin trying to
+        // uncheck "sold" — it reasserts on the next save so the listing
+        // can't be reopened just by raising stockLimit back down again.
+        sold:        source === 'original-print' ? (Boolean(sold) || autoSoldOut) : Boolean(sold),
         oversized:   isOversized,
         source,
         collections: collVal.value,
         ...gelatoFields,
+        ...stockFields,
         images:  currentImages,
         imgUrl:  null,
         imgData: null,
@@ -555,7 +619,7 @@ export default async function handler(req, res) {
       };
 
       await redis.set('artworks', artworks);
-      await auditLog({ action: 'update_painting', ip, detail: { id: numId, title: sanitizeString(title), price, source, imageCount: currentImages.length } });
+      await auditLog({ action: 'update_painting', ip, detail: { id: numId, title: sanitizeString(title), price, source, stockLimit: stockFields.stockLimit, imageCount: currentImages.length } });
       return res.status(200).json({ success: true, ...(importWarning ? { imageImportWarning: importWarning } : {}) });
     }
 

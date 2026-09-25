@@ -144,6 +144,44 @@ nav {
 }
 .hero-body:last-child { margin-bottom: 0; }
 
+/* ─── NIGHT SEA COLLECTION ANNOUNCEMENT ──────────────────────────────────────
+   Launch banner — intentionally self-contained so it's easy to remove later:
+   delete the #night-sea-announcement <section> in index.html and this block
+   when the initial push settles. No JS dependency, no other selectors touch
+   these classes. */
+.announcement-banner {
+  background: var(--accent);
+  border-bottom: 1px solid var(--border);
+  padding: 2.25rem 3rem;
+  text-align: center;
+}
+.announcement-inner { max-width: 640px; margin: 0 auto; }
+.announcement-headline {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(20px, 2.4vw, 26px);
+  font-weight: 300; font-style: italic;
+  color: var(--gold-light);
+  margin-bottom: 0.6rem;
+}
+.announcement-body {
+  color: rgba(249,246,241,0.75);
+  line-height: 1.8; font-size: 13px;
+  margin-bottom: 1.25rem;
+}
+.announcement-cta {
+  display: inline-block;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink); background: var(--gold);
+  padding: 0.75rem 1.75rem; text-decoration: none;
+  border: 1px solid var(--gold); transition: all 0.2s ease;
+}
+.announcement-cta:hover { background: var(--gold-light); border-color: var(--gold-light); }
+
+@media (max-width: 600px) {
+  .announcement-banner { padding: 1.75rem 1.25rem; }
+}
+
 /* ─── SHARED SECTION ──────────────────────────────────────────────────────── */
 .section { padding: 5rem 3rem; }
 .section-header {
@@ -252,6 +290,7 @@ nav {
 .artwork-title { font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 400; font-style: italic; }
 .artwork-price { font-size: 12px; color: var(--gold); letter-spacing: 0.08em; }
 .artwork-medium { font-size: 11px; color: var(--muted); margin-top: 2px; letter-spacing: 0.06em; }
+.artwork-stock { font-size: 10px; color: var(--gold); margin-top: 4px; letter-spacing: 0.08em; text-transform: uppercase; }
 .add-btn {
   margin-top: 12px; width: 100%; background: none; border: 1px solid var(--border);
   padding: 10px; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 10px;

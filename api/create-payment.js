@@ -47,8 +47,11 @@ function isValidPostcode(str, countryCode) {
  * client sends. We calculate it ourselves from authoritative server data.
  * The sold-check applies to every item regardless of source: for original
  * paintings it means "already purchased"; for Gelato prints it means an
- * admin has manually marked that print offering unavailable. Neither can
- * be bypassed by the client.
+ * admin has manually marked that print offering unavailable; for Original
+ * Print listings it means every copy of the limited run is already spoken
+ * for (see the stockSold/stockLimit check just below, and how they're
+ * updated after payment succeeds, further down this file). Neither can be
+ * bypassed by the client.
  */
 async function computeExpectedAmount(items) {
   if (!Array.isArray(items) || items.length === 0) {
@@ -58,16 +61,23 @@ async function computeExpectedAmount(items) {
   const artworksById = new Map();
   const sources      = new Set();
   let total = 0;
- 
+
   for (const item of items) {
     const art = artworks.find(a => Number(a.id) === Number(item.id));
     if (!art)       throw new Error(`Artwork ${item.id} not found`);
     if (art.sold)   throw new Error(`Artwork "${art.title}" is already sold`);
+    // Belt-and-braces against any drift between `sold` and the stock
+    // counters themselves — `sold` should already be true once a run
+    // sells out (see paintings.js and the post-payment update below), but
+    // this is money changing hands, so check the numbers directly too.
+    if (art.source === 'original-print' && typeof art.stockLimit === 'number' && (art.stockSold || 0) >= art.stockLimit) {
+      throw new Error(`Artwork "${art.title}" is sold out`);
+    }
     total += art.price;
     sources.add(art.source === 'gelato' ? 'gelato' : 'auspost');
     artworksById.set(Number(art.id), art);
   }
- 
+
   return { amountCents: Math.round(total * 100), sources, artworksById };
 }
  
@@ -471,19 +481,32 @@ export default async function handler(req, res) {
     await clearAttempts(ip, 'payment');
  
     // Re-fetch the live artwork list to apply the sold-state update.
-    // IMPORTANT: original paintings are marked sold (one-of-a-kind).
-    // Gelato print listings are NEVER auto-marked sold by a purchase —
-    // they remain available for other buyers, since a print is not unique.
-    // "sold" on a Gelato listing stays a manual admin action only (e.g.
-    // discontinuing that print offering).
+    // IMPORTANT — this differs by listing type:
+    //   'original' / oversized  → marked sold immediately (one-of-a-kind).
+    //   'gelato'                → NEVER auto-marked sold by a purchase; it
+    //                             remains available to other buyers, since
+    //                             a print-on-demand listing is not unique.
+    //                             "sold" there stays a manual admin action
+    //                             only (e.g. discontinuing that offering).
+    //   'original-print'        → NOT one-of-a-kind, but not unlimited
+    //                             either: stockSold increments by one per
+    //                             copy purchased, and once stockSold
+    //                             reaches stockLimit the listing is
+    //                             auto-flipped to sold/unavailable — no
+    //                             manual flipping needed per sale.
     const purchasedIds  = new Set(items.map(i => Number(i.id)));
     let artworks         = (await redis.get('artworks')) || [];
     const purchasedItems = artworks.filter(a => purchasedIds.has(Number(a.id)));
-    artworks = artworks.map(a =>
-      purchasedIds.has(Number(a.id)) && a.source !== 'gelato'
-        ? { ...a, sold: true }
-        : a
-    );
+    artworks = artworks.map(a => {
+      if (!purchasedIds.has(Number(a.id))) return a;
+      if (a.source === 'gelato') return a;
+      if (a.source === 'original-print') {
+        const stockSold = (a.stockSold || 0) + 1;
+        const limit     = typeof a.stockLimit === 'number' ? a.stockLimit : stockSold;
+        return { ...a, stockSold, sold: stockSold >= limit };
+      }
+      return { ...a, sold: true };
+    });
     await redis.set('artworks', artworks);
  
     await auditLog({
@@ -515,7 +538,7 @@ export default async function handler(req, res) {
         id:     a.id,
         title:  a.title,
         price:  a.price,
-        source: a.source === 'gelato' ? 'gelato' : 'original',
+        source: a.source === 'gelato' ? 'gelato' : a.source === 'original-print' ? 'original-print' : 'original',
         variantLabel: a.variantLabel || null,
       })),
       customer: { firstName, lastName, email, phone: phone || '' },

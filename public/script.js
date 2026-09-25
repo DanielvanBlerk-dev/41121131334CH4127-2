@@ -354,6 +354,17 @@ function renderCardContent(card, group) {
 
   card.appendChild(imgWrap); card.appendChild(labelRow); card.appendChild(mediumEl);
 
+  // Remaining-stock note — Original Print listings only, and only while
+  // still available (once sold out the "Sold" overlay/button already say
+  // enough, per art.sold — driven by stockSold/stockLimit server-side).
+  if (art.source === 'original-print' && !art.sold && typeof art.stockLimit === 'number') {
+    const remaining = Math.max(0, art.stockLimit - (art.stockSold || 0));
+    const stockEl = document.createElement('div');
+    stockEl.className = 'artwork-stock';
+    stockEl.textContent = remaining + ' of ' + art.stockLimit + ' remaining';
+    card.appendChild(stockEl);
+  }
+
   // ── Size picker — only for grouped (multi-variant) Gelato listings ─────
   if (group.length > 1) {
     const picker = document.createElement('div');
@@ -867,8 +878,8 @@ function addCollectionFromInput() {
 
 /**
  * Reads which "Listing type" radio is currently selected and returns its
- * value: 'original' | 'oversized' | 'gelato'. Defaults to 'original' if
- * for some reason nothing is checked.
+ * value: 'original' | 'oversized' | 'gelato' | 'original-print'. Defaults
+ * to 'original' if for some reason nothing is checked.
  */
 function getSelectedListingType() {
   const checked = document.querySelector('input[name="listing-type"]:checked');
@@ -876,18 +887,21 @@ function getSelectedListingType() {
 }
 
 /**
- * Shows/hides the shipping-dimensions block and the Gelato-only field
- * group based on the selected listing type. Generalises/replaces the old
- * updateOversizedToggle() — #shipping-dimensions is reused exactly as
- * before, now hidden for BOTH "Oversized" and "Gelato print", shown only
- * for "Original".
+ * Shows/hides the shipping-dimensions block, the Gelato-only field group,
+ * and the Original-Print-only field group based on the selected listing
+ * type. Generalises/replaces the old updateOversizedToggle() —
+ * #shipping-dimensions is shown for "Original" AND "Original Print" (both
+ * ship via AusPost the same way), hidden for "Oversized" and "Gelato
+ * print".
  */
 function updateListingTypeToggle() {
-  const type       = getSelectedListingType();
-  const dimensions = el('shipping-dimensions');
-  const gelato     = el('gelato-fields');
-  if (dimensions) dimensions.classList.toggle('hidden', type !== 'original');
-  if (gelato)     gelato.classList.toggle('hidden', type !== 'gelato');
+  const type          = getSelectedListingType();
+  const dimensions    = el('shipping-dimensions');
+  const gelato        = el('gelato-fields');
+  const originalPrint = el('original-print-fields');
+  if (dimensions)    dimensions.classList.toggle('hidden', type !== 'original' && type !== 'original-print');
+  if (gelato)        gelato.classList.toggle('hidden', type !== 'gelato');
+  if (originalPrint) originalPrint.classList.toggle('hidden', type !== 'original-print');
 }
 
 function openAddPanel() {
@@ -903,7 +917,8 @@ function openAddPanel() {
 
   ['new-title', 'new-medium', 'new-price',
    'new-weight', 'new-length', 'new-width', 'new-height',
-   'new-gelato-uid', 'new-print-group', 'new-variant-label'].forEach(id => {
+   'new-gelato-uid', 'new-print-group', 'new-variant-label',
+   'new-stock-limit'].forEach(id => {
     const field = el(id);
     if (field) field.value = '';
   });
@@ -913,6 +928,7 @@ function openAddPanel() {
   el('add-error').textContent = '';
   el('gelato-import-message').textContent = '';
   el('gelato-import-results').innerHTML   = '';
+  el('original-print-sold-note').textContent = '';
   pendingGelatoPreviewUrl = null;
 
   updateListingTypeToggle();
@@ -948,7 +964,9 @@ function openEditPanel(art) {
   el('new-sold').checked   = !!art.sold;
   el('add-error').textContent = '';
 
-  const type = art.source === 'gelato' ? 'gelato' : (art.oversized ? 'oversized' : 'original');
+  const type = art.source === 'gelato' ? 'gelato'
+             : art.source === 'original-print' ? 'original-print'
+             : (art.oversized ? 'oversized' : 'original');
   el('listing-type-' + type).checked = true;
 
   if (art.shipping) {
@@ -966,6 +984,10 @@ function openEditPanel(art) {
   el('gelato-import-message').textContent = '';
   el('gelato-import-results').innerHTML   = '';
   pendingGelatoPreviewUrl = null;
+
+  el('new-stock-limit').value = art.stockLimit != null ? art.stockLimit : '';
+  el('original-print-sold-note').textContent =
+    art.source === 'original-print' ? ((art.stockSold || 0) + ' of ' + (art.stockLimit != null ? art.stockLimit : '?') + ' sold so far.') : '';
 
   updateListingTypeToggle();
 
@@ -1113,9 +1135,10 @@ async function saveNewPainting() {
   const priceRaw    = el('new-price').value;
   const category    = el('new-category').value;
   const sold        = el('new-sold').checked;
-  const listingType = getSelectedListingType(); // 'original' | 'oversized' | 'gelato'
-  const oversized   = listingType === 'oversized';
-  const isGelato    = listingType === 'gelato';
+  const listingType     = getSelectedListingType(); // 'original' | 'oversized' | 'gelato' | 'original-print'
+  const oversized       = listingType === 'oversized';
+  const isGelato        = listingType === 'gelato';
+  const isOriginalPrint = listingType === 'original-print';
   const errEl       = el('add-error');
   const btn         = el('save-painting-btn');
   const savedLabel  = isEdit ? 'Save changes' : 'Save painting to gallery';
@@ -1131,6 +1154,12 @@ async function saveNewPainting() {
     printGroupId     = el('new-print-group').value.trim() || null;
     variantLabel     = el('new-variant-label').value.trim() || null;
     if (!gelatoProductUid) { errEl.textContent = 'Please enter or import a Gelato Product UID.'; return; }
+  }
+
+  let stockLimit;
+  if (isOriginalPrint) {
+    stockLimit = parseInt(el('new-stock-limit').value, 10);
+    if (!Number.isFinite(stockLimit) || stockLimit < 1) { errEl.textContent = 'Please enter a stock quantity of 1 or more.'; return; }
   }
 
   let weight, length, width, height;
@@ -1150,7 +1179,7 @@ async function saveNewPainting() {
 
   const body = {
     title, medium, price, category, sold, oversized,
-    source: isGelato ? 'gelato' : 'original',
+    source: isGelato ? 'gelato' : isOriginalPrint ? 'original-print' : 'original',
     collections: newCollections,
   };
   if (isGelato) {
@@ -1167,6 +1196,10 @@ async function saveNewPainting() {
     // handles its own print shipping regardless of size (Part 5.3).
   } else if (!oversized) {
     body.weight = weight; body.length = length; body.width = width; body.height = height;
+    // Original Print ships via AusPost exactly like a standard Original,
+    // so it takes the same dimensions branch above — plus its own stock
+    // quantity below.
+    if (isOriginalPrint) body.stockLimit = stockLimit;
   }
 
   let targetId;
