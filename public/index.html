@@ -140,12 +140,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 
   <!-- ── STYLES ─────────────────────────────────────────────────────────── -->
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=11">
 
   <!-- ── SQUARE + APP SCRIPTS ──────────────────────────────────────────── -->
   <script src="https://web.squarecdn.com/v1/square.js" defer></script>
   <script src="square-config.js?v=6" defer></script>
-  <script src="script.js?v=9" defer></script>
+  <script src="script.js?v=11" defer></script>
 
   <script>
     window.va = window.va || function () {
@@ -709,12 +709,14 @@
   <div class="image-settings-overlay" id="image-settings-overlay" role="dialog" aria-modal="true" aria-label="Image settings">
     <div class="image-settings-box">
       <h2 class="image-settings-title">Image settings</h2>
-      <p class="image-settings-sub">Controls how new photos are resized and compressed before they're stored. This is what keeps Vercel's "Blob Data Transfer" usage down — smaller files mean less bandwidth every time someone views the gallery. Only affects photos uploaded from now on; nothing already on the site is touched.</p>
+      <p class="image-settings-sub">Controls how new photos are resized and compressed before they're stored. Every upload now produces TWO versions: a full-size image (used in the lightbox and for print orders) and a small thumbnail (used in the gallery grid). The thumbnail is what actually keeps Vercel's "Blob Data Transfer" usage down — grid cards are only a few hundred pixels wide, so serving the thumbnail there instead of the full image is the big saving. Only affects photos uploaded from now on; use "Regenerate thumbnails" below to apply this to photos already on the site.</p>
 
       <div class="form-group-inline">
         <input type="checkbox" id="img-settings-enabled">
         <label for="img-settings-enabled" class="checkbox-label">Compress new uploads</label>
       </div>
+
+      <p class="image-settings-section-label">Full image (lightbox &amp; print orders)</p>
 
       <div class="form-group">
         <label for="img-settings-max-dimension">Max dimension (px)</label>
@@ -728,11 +730,32 @@
         <p class="field-helper">Re-encode quality for JPEG/WEBP photos. Lower means smaller files but more visible compression. 80–85 is a good balance.</p>
       </div>
 
+      <p class="image-settings-section-label">Thumbnail (gallery grid)</p>
+
+      <div class="form-group">
+        <label for="img-settings-thumb-max-dimension">Thumbnail max dimension (px)</label>
+        <input type="number" id="img-settings-thumb-max-dimension" min="150" max="1600" step="50">
+        <p class="field-helper">The longest edge of the small version shown in the gallery grid. 600–800px is plenty for how large a grid tile actually renders — this is the number that matters most for Data Transfer usage.</p>
+      </div>
+
+      <div class="form-group">
+        <label for="img-settings-thumb-quality">Thumbnail quality (%)</label>
+        <input type="number" id="img-settings-thumb-quality" min="30" max="100" step="1">
+        <p class="field-helper">Re-encode quality for the thumbnail. Can reasonably be lower than the full-image quality since it's displayed small. 70–80 is a good balance.</p>
+      </div>
+
       <p class="image-settings-error" id="image-settings-error" role="alert"></p>
       <p class="image-settings-success" id="image-settings-success" role="status"></p>
 
       <button class="login-btn" id="image-settings-save-btn">Save settings</button>
       <button class="login-cancel" id="image-settings-close-btn">Close</button>
+
+      <hr class="image-settings-divider">
+
+      <p class="image-settings-section-label">Existing photos</p>
+      <p class="field-helper">Photos uploaded before thumbnails existed are still served at full size in the gallery grid. Click below to generate thumbnails for them retroactively — this is what actually brings your existing Data Transfer usage down, not just future uploads. Safe to run more than once; already-thumbnailed photos are skipped.</p>
+      <p class="image-settings-sub" id="backfill-thumbnails-status" role="status"></p>
+      <button class="login-btn" id="backfill-thumbnails-btn" type="button">Regenerate thumbnails for existing photos</button>
     </div>
   </div>
 
@@ -860,7 +883,10 @@
           field below. The listing automatically switches to Out of Stock
           once that many copies have been sold — no manual flipping
           needed per sale (see #original-print-fields, and stockLimit /
-          stockSold in paintings.js / create-payment.js).
+          stockSold in paintings.js / create-payment.js). Also reveals its
+          own Print group / Size label fields — same grouping mechanism
+          as Gelato prints below — so e.g. A3/A2/A1 runs of the same print
+          can be combined into one gallery card with a size picker.
         updateListingTypeToggle() in script.js shows/hides the
         #shipping-dimensions, #gelato-fields, and #original-print-fields
         blocks based on which radio is checked. This replaces the old
@@ -902,6 +928,15 @@
           <label for="new-stock-limit">Stock quantity</label>
           <input type="number" id="new-stock-limit" placeholder="e.g. 20" min="1" step="1">
           <p class="field-helper" id="original-print-sold-note"></p>
+        </div>
+        <div class="form-group">
+          <label for="new-op-print-group">Print group</label>
+          <input type="text" id="new-op-print-group" placeholder="e.g. whitehaven-dusk">
+          <p class="field-helper">Give two or more Original Print listings the same value to combine them into one gallery card with a size picker — each size keeps its own price, stock quantity and photos.</p>
+        </div>
+        <div class="form-group">
+          <label for="new-op-variant-label">Size label</label>
+          <input type="text" id="new-op-variant-label" placeholder="e.g. A3">
         </div>
       </div>
 

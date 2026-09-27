@@ -547,6 +547,14 @@ nav {
 .image-settings-sub   { font-size: 11px; color: var(--muted); line-height: 1.7; margin-bottom: 1.5rem; }
 .image-settings-error   { color: #c0392b; font-size: 11px; margin-top: 8px; min-height: 16px; }
 .image-settings-success { color: #3d7a4d; font-size: 11px; margin-top: 8px; min-height: 16px; }
+.image-settings-section-label {
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--gold); margin: 1.75rem 0 0.75rem; font-weight: 600;
+}
+.image-settings-divider { border: none; border-top: 1px solid var(--border); margin: 2rem 0 0; }
+#backfill-thumbnails-status { margin: 0.5rem 0 1rem; }
+#backfill-thumbnails-btn { width: 100%; }
+#backfill-thumbnails-btn:disabled { opacity: 0.5; cursor: default; }
 
 /* Before/after size note shown after a photo upload completes — used in
    both the add/edit painting panel (#image-compression-note) and next to

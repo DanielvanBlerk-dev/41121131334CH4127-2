@@ -7,7 +7,7 @@ import { auditLog } from './_auditLog.js';
 import { checkCsrf } from './_csrf.js';
 import { checkBodySize } from './_bodyLimit.js';
 import { getImageSettings, saveImageSettings, validateImageSettings } from './_imageSettings.js';
-import { compressImage } from './_imageCompress.js';
+import { compressImage, compressToVariants } from './_imageCompress.js';
 
 const redis = new Redis({
   url:   process.env.UPSTASH_REDIS_REST_URL,
@@ -74,7 +74,7 @@ async function deleteAllBlobs(images = []) {
  * hitting if Gelato's preview CDN doesn't set permissive CORS headers.
  *
  * @param {string} sourceUrl
- * @returns {Promise<{ ok: boolean, url?: string, error?: string }>}
+ * @returns {Promise<{ ok: boolean, url?: string, thumbUrl?: string, error?: string }>}
  */
 async function importGelatoPreviewImage(sourceUrl) {
   if (!sourceUrl || typeof sourceUrl !== 'string' || !/^https:\/\//.test(sourceUrl)) {
@@ -106,34 +106,99 @@ async function importGelatoPreviewImage(sourceUrl) {
     return { ok: false, error: 'Gelato’s preview image is too large (over 4MB).' };
   }
 
-  // ── Compress (or pass through) ───────────────────────────────────────
+  // ── Compress into full + thumbnail variants (or pass through) ────────
   // Same pipeline the manual upload routes use (upload-image.js,
   // update-artist-photo.js) and the same admin-controlled settings — a
   // Gelato-imported preview is still a photo that gets served to every
   // gallery visitor, so it counts toward Blob Data Transfer exactly like
-  // a hand-uploaded one and should be sized the same way.
-  let uploadBuffer = buffer, uploadContentType = contentType, ext = contentType.split('/')[1]?.split(';')[0] || 'jpg';
+  // a hand-uploaded one and should be sized the same way, including the
+  // separate small thumbnail used for the gallery grid (see
+  // _imageCompress.js compressToVariants).
+  let fullBuffer  = buffer, fullContentType  = contentType, fullExt  = contentType.split('/')[1]?.split(';')[0] || 'jpg';
+  let thumbBuffer = buffer, thumbContentType = contentType, thumbExt = fullExt;
   const settings = await getImageSettings();
   if (settings.enabled) {
-    const dataUri = `data:${contentType};base64,${buffer.toString('base64')}`;
-    const compressed = await compressImage(dataUri, settings);
-    if (compressed.ok) {
-      uploadBuffer      = compressed.buffer;
-      uploadContentType = compressed.mimeType;
-      ext               = compressed.ext;
+    const dataUri  = `data:${contentType};base64,${buffer.toString('base64')}`;
+    const variants = await compressToVariants(dataUri, settings);
+    if (variants.ok) {
+      fullBuffer  = variants.full.buffer;  fullContentType  = variants.full.mimeType;  fullExt  = variants.full.ext;
+      thumbBuffer = variants.thumb.buffer; thumbContentType = variants.thumb.mimeType; thumbExt = variants.thumb.ext;
     } else {
-      console.error('Compression failed for Gelato preview import — storing original:', compressed.error);
+      console.error('Compression failed for Gelato preview import — storing original:', variants.error);
     }
   }
 
-  const pathname = `artworks/gelato-import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const stamp    = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const pathname      = `artworks/gelato-import-${stamp}.${fullExt}`;
+  const thumbPathname = `artworks/gelato-import-${stamp}-thumb.${thumbExt}`;
 
   try {
-    const blob = await put(pathname, uploadBuffer, { access: 'public', contentType: uploadContentType });
-    return { ok: true, url: blob.url };
+    const blob = await put(pathname, fullBuffer, { access: 'public', contentType: fullContentType });
+    let thumbUrl = blob.url;
+    try {
+      const thumbBlob = await put(thumbPathname, thumbBuffer, { access: 'public', contentType: thumbContentType });
+      thumbUrl = thumbBlob.url;
+    } catch (err) {
+      console.error('Gelato preview thumbnail blob upload error — falling back to full image:', err);
+    }
+    return { ok: true, url: blob.url, thumbUrl };
   } catch (err) {
     console.error('Gelato preview image blob upload error:', err);
     return { ok: false, error: 'Could not save the imported image.' };
+  }
+}
+
+/**
+ * Fetches an already-stored image (one of our own Blob URLs) and produces
+ * just a thumbnail variant for it, uploaded alongside the original. Used
+ * only by the 'backfill-thumbnails' PATCH action below, to retroactively
+ * generate thumbnails for photos that were uploaded before the two-tier
+ * thumbnail system existed (see _imageCompress.js / upload-image.js).
+ *
+ * @param {string} imageUrl - existing full-size Blob URL to derive a
+ *   thumbnail from.
+ * @param {{ thumbMaxDimension: number, thumbQuality: number }} settings
+ * @returns {Promise<{ ok: boolean, thumbUrl?: string, error?: string }>}
+ */
+async function backfillThumbnailForImage(imageUrl, settings) {
+  if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.includes('blob.vercel-storage.com')) {
+    return { ok: false, error: 'Not a recognised image URL.' };
+  }
+
+  let res;
+  try {
+    res = await fetch(imageUrl);
+  } catch (err) {
+    return { ok: false, error: 'Could not download the existing image.' };
+  }
+  if (!res.ok) return { ok: false, error: `Could not download the existing image (HTTP ${res.status}).` };
+
+  const contentType = res.headers.get('content-type') || 'image/jpeg';
+  const buffer       = Buffer.from(await res.arrayBuffer());
+  const dataUri       = `data:${contentType};base64,${buffer.toString('base64')}`;
+
+  const thumb = await compressImage(dataUri, { maxDimension: settings.thumbMaxDimension, quality: settings.thumbQuality });
+  if (!thumb.ok) return { ok: false, error: thumb.error };
+
+  // Derive the thumbnail's blob pathname from the original's own pathname
+  // (everything after the last '/'), so it sits next to the full image in
+  // the same 'paintings/' or 'artworks/' folder, e.g.
+  // paintings/painting-123-456-0.jpg -> paintings/painting-123-456-0-backfilled-thumb.jpg
+  let baseName = 'backfilled';
+  try {
+    const parts = new URL(imageUrl).pathname.split('/');
+    const last  = parts[parts.length - 1] || '';
+    baseName    = last.replace(/\.[^.]+$/, '') || 'backfilled';
+  } catch { /* fall back to the default baseName above */ }
+
+  const thumbPathname = `paintings/${baseName}-backfilled-thumb-${Date.now()}.${thumb.ext}`;
+
+  try {
+    const thumbBlob = await put(thumbPathname, thumb.buffer, { access: 'public', contentType: thumb.mimeType });
+    return { ok: true, thumbUrl: thumbBlob.url };
+  } catch (err) {
+    console.error('Backfill thumbnail blob upload error:', err);
+    return { ok: false, error: 'Could not save the generated thumbnail.' };
   }
 }
 
@@ -375,7 +440,7 @@ export default async function handler(req, res) {
       const isOversized = source === 'gelato' ? false : Boolean(oversized);
 
       // ── Gelato-specific fields ──────────────────────────────────────
-      let gelatoFields = { gelatoProductUid: null, printGroupId: null, variantLabel: null };
+      let gelatoFields = { gelatoProductUid: null };
       if (source === 'gelato') {
         if (!isValidString(gelatoProductUid)) {
           return res.status(400).json({ success: false, error: 'A Gelato Product UID is required for print listings.' });
@@ -387,17 +452,32 @@ export default async function handler(req, res) {
         // slugs (product + size + material + colour codes concatenated)
         // that can genuinely exceed 100 characters. A too-low cap here
         // would silently block a legitimate listing with no workaround.
-        const gelatoCaps = capFields([
-          ['Gelato Product UID', gelatoProductUid, 300],
+        const gelatoCaps = capFields([['Gelato Product UID', gelatoProductUid, 300]]);
+        if (!gelatoCaps.ok) return res.status(400).json({ success: false, error: gelatoCaps.error });
+
+        gelatoFields = { gelatoProductUid: String(gelatoProductUid).trim() };
+      }
+
+      // ── Grouping (Print group / Size label) — for multi-size listings ─
+      // Combines listings that share a printGroupId into one gallery card
+      // with a size picker (see groupArtworksByPrintGroup in script.js).
+      // Available to both Gelato print-on-demand AND Original Print
+      // (limited run) listings — either can be offered in more than one
+      // size, each size its own record (own price/stock/images) sharing
+      // one printGroupId. Not meaningful for a one-of-a-kind standard
+      // Original or an Oversized freight listing, so left null there
+      // regardless of what's sent.
+      let groupingFields = { printGroupId: null, variantLabel: null };
+      if (source === 'gelato' || source === 'original-print') {
+        const groupCaps = capFields([
           ...(printGroupId ? [['Print group', String(printGroupId), 100]] : []),
           ...(variantLabel ? [['Size label', String(variantLabel), 40]] : []),
         ]);
-        if (!gelatoCaps.ok) return res.status(400).json({ success: false, error: gelatoCaps.error });
+        if (!groupCaps.ok) return res.status(400).json({ success: false, error: groupCaps.error });
 
-        gelatoFields = {
-          gelatoProductUid: String(gelatoProductUid).trim(),
-          printGroupId:     printGroupId ? String(printGroupId).trim() : null,
-          variantLabel:     variantLabel ? sanitizeString(String(variantLabel)) : null,
+        groupingFields = {
+          printGroupId: printGroupId ? String(printGroupId).trim() : null,
+          variantLabel: variantLabel ? sanitizeString(String(variantLabel)) : null,
         };
       }
 
@@ -439,11 +519,13 @@ export default async function handler(req, res) {
       // images empty, exactly like today, with the reason reported back so
       // the admin can fall back to uploading a photo manually.
       let importedImageUrl = null;
+      let importedThumbUrl = null;
       let importWarning     = null;
       if (source === 'gelato' && gelatoPreviewUrl) {
         const imported = await importGelatoPreviewImage(gelatoPreviewUrl);
         if (imported.ok) {
           importedImageUrl = imported.url;
+          importedThumbUrl = imported.thumbUrl || imported.url;
         } else {
           importWarning = imported.error;
         }
@@ -467,15 +549,17 @@ export default async function handler(req, res) {
         source,
         collections: collVal.value,
         ...gelatoFields,
+        ...groupingFields,
         ...stockFields,
-        images:  importedImageUrl ? [importedImageUrl] : [],
+        images:     importedImageUrl ? [importedImageUrl] : [],
+        thumbnails: importedImageUrl ? [importedThumbUrl] : [],
         imgUrl:  null,
         imgData: null,
         svg:     null,
         shipping,
       });
       await redis.set('artworks', artworks);
-      await auditLog({ action: 'add_painting', ip, detail: { id, title: sanitizeString(title), price, source, oversized: isOversized, stockLimit: stockFields.stockLimit, importedGelatoImage: !!importedImageUrl } });
+      await auditLog({ action: 'add_painting', ip, detail: { id, title: sanitizeString(title), price, source, oversized: isOversized, stockLimit: stockFields.stockLimit, printGroupId: groupingFields.printGroupId, importedGelatoImage: !!importedImageUrl } });
 
       return res.status(200).json({ success: true, id, ...(importWarning ? { imageImportWarning: importWarning } : {}) });
     }
@@ -517,7 +601,7 @@ export default async function handler(req, res) {
       const isOversized = source === 'gelato' ? false : Boolean(oversized);
 
       // ── Gelato-specific fields ──────────────────────────────────────
-      let gelatoFields = { gelatoProductUid: null, printGroupId: null, variantLabel: null };
+      let gelatoFields = { gelatoProductUid: null };
       if (source === 'gelato') {
         if (!isValidString(gelatoProductUid)) {
           return res.status(400).json({ success: false, error: 'A Gelato Product UID is required for print listings.' });
@@ -529,17 +613,26 @@ export default async function handler(req, res) {
         // slugs (product + size + material + colour codes concatenated)
         // that can genuinely exceed 100 characters. A too-low cap here
         // would silently block a legitimate listing with no workaround.
-        const gelatoCaps = capFields([
-          ['Gelato Product UID', gelatoProductUid, 300],
+        const gelatoCaps = capFields([['Gelato Product UID', gelatoProductUid, 300]]);
+        if (!gelatoCaps.ok) return res.status(400).json({ success: false, error: gelatoCaps.error });
+
+        gelatoFields = { gelatoProductUid: String(gelatoProductUid).trim() };
+      }
+
+      // ── Grouping (Print group / Size label) — for multi-size listings ─
+      // See the matching comment in the POST handler above — same rule:
+      // available to Gelato and Original Print listings, null otherwise.
+      let groupingFields = { printGroupId: null, variantLabel: null };
+      if (source === 'gelato' || source === 'original-print') {
+        const groupCaps = capFields([
           ...(printGroupId ? [['Print group', String(printGroupId), 100]] : []),
           ...(variantLabel ? [['Size label', String(variantLabel), 40]] : []),
         ]);
-        if (!gelatoCaps.ok) return res.status(400).json({ success: false, error: gelatoCaps.error });
+        if (!groupCaps.ok) return res.status(400).json({ success: false, error: groupCaps.error });
 
-        gelatoFields = {
-          gelatoProductUid: String(gelatoProductUid).trim(),
-          printGroupId:     printGroupId ? String(printGroupId).trim() : null,
-          variantLabel:     variantLabel ? sanitizeString(String(variantLabel)) : null,
+        groupingFields = {
+          printGroupId: printGroupId ? String(printGroupId).trim() : null,
+          variantLabel: variantLabel ? sanitizeString(String(variantLabel)) : null,
         };
       }
 
@@ -590,34 +683,62 @@ export default async function handler(req, res) {
         autoSoldOut = currentSold >= parsedLimit;
       }
 
-      // ── Normalise images[] ────────────────────────────────────────────
+      // ── Normalise images[] / thumbnails[] ─────────────────────────────
+      // thumbnails[] is kept parallel to images[] (same length, same
+      // order) — a null entry means "no thumbnail yet for this image"
+      // (pre-existing photo, not yet backfilled — see
+      // backfillThumbnailForImage / the 'backfill-thumbnails' PATCH
+      // action below), and the frontend falls back to the full image for
+      // that slot. Padded to the same length as currentImages so index
+      // correspondence always holds, even for records saved before this
+      // field existed.
       const existing     = artworks[idx];
       let currentImages  = Array.isArray(existing.images) && existing.images.length > 0
         ? [...existing.images]
         : (existing.imgUrl ? [existing.imgUrl] : []);
+      let currentThumbnails = Array.isArray(existing.thumbnails) ? [...existing.thumbnails] : [];
+      while (currentThumbnails.length < currentImages.length) currentThumbnails.push(null);
 
-      // ── Remove flagged images ─────────────────────────────────────────
+      // ── Remove flagged images (and their paired thumbnail) ────────────
       const safeToRemove = removeImageUrls.filter(url =>
         typeof url === 'string' &&
         url.includes('blob.vercel-storage.com') &&
         currentImages.includes(url)
       );
+      const thumbsToDelete = [];
+      const keptImages = [], keptThumbnails = [];
+      currentImages.forEach((url, i) => {
+        if (safeToRemove.includes(url)) {
+          if (currentThumbnails[i]) thumbsToDelete.push(currentThumbnails[i]);
+          return;
+        }
+        keptImages.push(url);
+        keptThumbnails.push(currentThumbnails[i] ?? null);
+      });
       await Promise.all(safeToRemove.map(url => deleteBlob(url)));
-      currentImages = currentImages.filter(url => !safeToRemove.includes(url));
+      await Promise.all(thumbsToDelete.map(url => deleteBlob(url)));
+      currentImages     = keptImages;
+      currentThumbnails = keptThumbnails;
 
       // ── Optional: import the Gelato product's own preview image ──────
       // Same as the POST path above — never blocks saving the rest of the
       // edit. Added to the FRONT of the images array only when this
       // listing currently has no photo at all, so importing never bumps a
       // photo the admin already deliberately chose as the hero image; if
-      // it already has photos, the import is appended instead.
+      // it already has photos, the import is appended instead. The
+      // thumbnail is kept in lockstep at the same index.
       let importWarning = null;
       if (source === 'gelato' && gelatoPreviewUrl) {
         const imported = await importGelatoPreviewImage(gelatoPreviewUrl);
         if (imported.ok) {
-          currentImages = currentImages.length === 0
-            ? [imported.url]
-            : [...currentImages, imported.url];
+          const importedThumb = imported.thumbUrl || imported.url;
+          if (currentImages.length === 0) {
+            currentImages     = [imported.url];
+            currentThumbnails = [importedThumb];
+          } else {
+            currentImages     = [...currentImages, imported.url];
+            currentThumbnails = [...currentThumbnails, importedThumb];
+          }
         } else {
           importWarning = imported.error;
         }
@@ -642,8 +763,10 @@ export default async function handler(req, res) {
         source,
         collections: collVal.value,
         ...gelatoFields,
+        ...groupingFields,
         ...stockFields,
-        images:  currentImages,
+        images:     currentImages,
+        thumbnails: currentThumbnails,
         imgUrl:  null,
         imgData: null,
         shipping,
@@ -667,7 +790,9 @@ export default async function handler(req, res) {
       const blobsToDelete = Array.isArray(target.images) && target.images.length > 0
         ? target.images
         : (target.imgUrl ? [target.imgUrl] : []);
+      const thumbsToDelete = Array.isArray(target.thumbnails) ? target.thumbnails.filter(Boolean) : [];
       await deleteAllBlobs(blobsToDelete);
+      await deleteAllBlobs(thumbsToDelete);
 
       artworks = artworks.filter(a => Number(a.id) !== numId);
       await redis.set('artworks', artworks);
@@ -677,22 +802,83 @@ export default async function handler(req, res) {
 
     // ── PATCH — toggle sold status (default), or reorder (Task 4) ────────
     case 'PATCH': {
-      const { action, id, order, enabled, maxDimension, quality } = req.body || {};
+      const {
+        action, id, order,
+        enabled, maxDimension, quality, thumbMaxDimension, thumbQuality,
+        batchSize,
+      } = req.body || {};
 
       // ── Update image compression settings ─────────────────────────────
       // Body: { action: 'update-image-settings', enabled, maxDimension,
-      // quality } — see _imageSettings.js for what each field means and
-      // its valid range. Takes effect on the very next upload through any
-      // route (upload-image.js, update-artist-photo.js, the Gelato-preview
-      // import above) — no redeploy needed.
+      // quality, thumbMaxDimension, thumbQuality } — see _imageSettings.js
+      // for what each field means and its valid range. Takes effect on the
+      // very next upload through any route (upload-image.js,
+      // update-artist-photo.js, the Gelato-preview import above) — no
+      // redeploy needed.
       if (action === 'update-image-settings') {
-        const validated = validateImageSettings({ enabled, maxDimension, quality });
+        const validated = validateImageSettings({ enabled, maxDimension, quality, thumbMaxDimension, thumbQuality });
         if (!validated.ok) {
           return res.status(400).json({ success: false, error: validated.error });
         }
         await saveImageSettings(validated.value);
         await auditLog({ action: 'update_image_settings', ip, detail: validated.value });
         return res.status(200).json({ success: true, settings: validated.value });
+      }
+
+      // ── Backfill thumbnails for existing photos ───────────────────────
+      // Body: { action: 'backfill-thumbnails', batchSize? }. Processes a
+      // small batch of images that are missing a thumbnail (thumbnails[i]
+      // is null/absent) per call, generating one via
+      // backfillThumbnailForImage() and saving it into that artwork's
+      // thumbnails[] array. Deliberately batched rather than doing the
+      // whole catalogue in one request — Vercel serverless functions have
+      // a execution time limit, and Michael's catalogue (~60-80 paintings,
+      // several photos each) is comfortably too much to process in one
+      // call. The frontend (script.js) loops this endpoint, showing
+      // progress, until `remaining` reaches 0.
+      if (action === 'backfill-thumbnails') {
+        const parsedBatch = parseInt(batchSize, 10);
+        const limit = Number.isFinite(parsedBatch) ? Math.min(Math.max(parsedBatch, 1), 20) : 8;
+
+        let artworks = (await redis.get('artworks')) || [];
+        const settings = await getImageSettings();
+
+        // Build a flat worklist of every (artwork index, image index) pair
+        // that's missing a thumbnail, across the whole catalogue, so the
+        // batch limit applies globally rather than per-artwork.
+        const worklist = [];
+        artworks.forEach((art, aIdx) => {
+          const images = Array.isArray(art.images) ? art.images : [];
+          const thumbs = Array.isArray(art.thumbnails) ? art.thumbnails : [];
+          images.forEach((imgUrl, iIdx) => {
+            if (imgUrl && !thumbs[iIdx]) worklist.push({ aIdx, iIdx, imgUrl });
+          });
+        });
+
+        const totalRemainingBefore = worklist.length;
+        const batch = worklist.slice(0, limit);
+
+        let processed = 0, failed = 0;
+        for (const { aIdx, iIdx, imgUrl } of batch) {
+          const result = await backfillThumbnailForImage(imgUrl, settings);
+          const art = artworks[aIdx];
+          if (!Array.isArray(art.thumbnails)) art.thumbnails = [];
+          while (art.thumbnails.length < art.images.length) art.thumbnails.push(null);
+          if (result.ok) {
+            art.thumbnails[iIdx] = result.thumbUrl;
+            processed++;
+          } else {
+            // Leave as null — it'll be retried on the next backfill call
+            // rather than falling back to the full image forever.
+            console.error(`Backfill thumbnail failed for artwork ${art.id} image ${iIdx}:`, result.error);
+            failed++;
+          }
+        }
+
+        if (batch.length > 0) await redis.set('artworks', artworks);
+        const remaining = totalRemainingBefore - processed;
+        await auditLog({ action: 'backfill_thumbnails', ip, detail: { processed, failed, remaining } });
+        return res.status(200).json({ success: true, processed, failed, remaining, total: totalRemainingBefore });
       }
 
       // ── Reorder — admin drag-and-drop within one gallery section ─────

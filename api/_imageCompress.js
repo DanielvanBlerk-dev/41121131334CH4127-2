@@ -101,3 +101,39 @@ export async function compressImage(imgData, settings) {
     return { ok: false, error: err.message || 'Compression failed.' };
   }
 }
+
+/**
+ * Produces BOTH the full/display version and the small gallery-grid
+ * thumbnail from one source image, using the admin's current settings
+ * (see _imageSettings.js). This is what actually controls Vercel Blob
+ * "Data Transfer" on a normal page view: the gallery grid renders every
+ * card at a few hundred pixels wide, so serving the same 2000px+ file
+ * used for the lightbox into every tiny grid tile was wasting 16-36x
+ * more bytes than the tile needed — compression alone (a single size)
+ * never fixed that, because it was still sized for the lightbox, not the
+ * grid. Used by upload-image.js, the Gelato-preview import in
+ * paintings.js, and the backfill-thumbnails PATCH action in paintings.js
+ * (for photos uploaded before this two-size system existed).
+ *
+ * Both variants are generated independently from the original source
+ * (not thumbnail-from-full), so thumbnail quality doesn't compound with
+ * full-image compression loss.
+ *
+ * @param {string} imgData - base64 data URI (not yet compressed).
+ * @param {{ maxDimension: number, quality: number,
+ *            thumbMaxDimension: number, thumbQuality: number }} settings
+ * @returns {Promise<{
+ *   ok: true,
+ *   full:  { buffer: Buffer, mimeType: string, ext: string, originalBytes: number, finalBytes: number, skipped?: string },
+ *   thumb: { buffer: Buffer, mimeType: string, ext: string, originalBytes: number, finalBytes: number, skipped?: string },
+ * } | { ok: false, error: string }>}
+ */
+export async function compressToVariants(imgData, settings) {
+  const full = await compressImage(imgData, { maxDimension: settings.maxDimension, quality: settings.quality });
+  if (!full.ok) return { ok: false, error: full.error };
+
+  const thumb = await compressImage(imgData, { maxDimension: settings.thumbMaxDimension, quality: settings.thumbQuality });
+  if (!thumb.ok) return { ok: false, error: thumb.error };
+
+  return { ok: true, full, thumb };
+}

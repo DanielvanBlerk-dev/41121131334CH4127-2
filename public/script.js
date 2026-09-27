@@ -339,10 +339,22 @@ function renderCardContent(card, group) {
   const imgWrap = document.createElement('div');
   imgWrap.className = 'artwork-img';
 
-  const heroUrl = art.images && art.images.length > 0 ? art.images[0] : null;
+  // Prefer the small gallery-grid thumbnail over the full-size image —
+  // the grid renders every card at a few hundred pixels wide, so serving
+  // the full lightbox-sized image here was the actual driver of Vercel
+  // Blob "Data Transfer" on a normal page view (see _imageCompress.js).
+  // Falls back to the full image for a photo that has no thumbnail yet
+  // (pre-existing, not yet backfilled — see the Image Settings panel's
+  // "Regenerate thumbnails" button). openLightbox() below deliberately
+  // reads art.images directly, never thumbnails, so the lightbox always
+  // shows full resolution regardless of what the grid displays.
+  const heroUrl = (art.thumbnails && art.thumbnails[0])
+    ? art.thumbnails[0]
+    : (art.images && art.images.length > 0 ? art.images[0] : null);
   if (heroUrl) {
     const img = document.createElement('img');
     img.src = heroUrl; img.alt = art.title || '';
+    img.loading = 'lazy';
     img.onerror = () => { img.style.display = 'none'; };
     imgWrap.appendChild(img);
   } else if (art.svg) {
@@ -938,7 +950,7 @@ function openAddPanel() {
   ['new-title', 'new-medium', 'new-price',
    'new-weight', 'new-length', 'new-width', 'new-height',
    'new-gelato-uid', 'new-print-group', 'new-variant-label',
-   'new-stock-limit'].forEach(id => {
+   'new-stock-limit', 'new-op-print-group', 'new-op-variant-label'].forEach(id => {
     const field = el(id);
     if (field) field.value = '';
   });
@@ -1005,6 +1017,11 @@ function openEditPanel(art) {
   el('gelato-import-message').textContent = '';
   el('gelato-import-results').innerHTML   = '';
   pendingGelatoPreviewUrl = null;
+
+  // Original Print listings have their own Print group / Size label
+  // fields (same mechanism, different inputs — see saveNewPainting).
+  el('new-op-print-group').value   = art.printGroupId || '';
+  el('new-op-variant-label').value = art.variantLabel || '';
 
   el('new-stock-limit').value = art.stockLimit != null ? art.stockLimit : '';
   el('original-print-sold-note').textContent =
@@ -1171,12 +1188,22 @@ async function saveNewPainting() {
   const price = parseInt(priceRaw, 10);
   if (!priceRaw || isNaN(price) || price < 0) { errEl.textContent = 'Please enter a valid price.'; return; }
 
-  let gelatoProductUid, printGroupId, variantLabel;
+  // Print group / Size label — the mechanism that combines multiple
+  // listings (Gelato print sizes, or Original Print run sizes) into one
+  // gallery card with a size picker (see paintings.js's groupingFields
+  // and script.js's groupArtworksByPrintGroup). Gelato and Original
+  // Print each have their own input pair in the panel, since they're
+  // never shown at the same time, but both feed the same body fields.
+  let gelatoProductUid;
+  let printGroupId = null, variantLabel = null;
   if (isGelato) {
     gelatoProductUid = el('new-gelato-uid').value.trim();
     printGroupId     = el('new-print-group').value.trim() || null;
     variantLabel     = el('new-variant-label').value.trim() || null;
     if (!gelatoProductUid) { errEl.textContent = 'Please enter or import a Gelato Product UID.'; return; }
+  } else if (isOriginalPrint) {
+    printGroupId = el('new-op-print-group').value.trim() || null;
+    variantLabel = el('new-op-variant-label').value.trim() || null;
   }
 
   let stockLimit;
@@ -1221,8 +1248,12 @@ async function saveNewPainting() {
     body.weight = weight; body.length = length; body.width = width; body.height = height;
     // Original Print ships via AusPost exactly like a standard Original,
     // so it takes the same dimensions branch above — plus its own stock
-    // quantity below.
-    if (isOriginalPrint) body.stockLimit = stockLimit;
+    // quantity and Print group / Size label below.
+    if (isOriginalPrint) {
+      body.stockLimit   = stockLimit;
+      body.printGroupId = printGroupId;
+      body.variantLabel = variantLabel;
+    }
   }
 
   let targetId;
@@ -1344,7 +1375,9 @@ function updateCartUI() {
     cart.forEach(art => {
       const item  = document.createElement('div'); item.className = 'cart-item';
       const thumb = document.createElement('div'); thumb.className = 'cart-item-thumb';
-      const heroUrl = art.images && art.images.length > 0 ? art.images[0] : null;
+      const heroUrl = (art.thumbnails && art.thumbnails[0])
+        ? art.thumbnails[0]
+        : (art.images && art.images.length > 0 ? art.images[0] : null);
       if (heroUrl) {
         const img = document.createElement('img'); img.src = heroUrl; img.alt = art.title;
         img.onerror = () => { img.style.display = 'none'; };
@@ -1489,9 +1522,12 @@ async function openImageSettingsPanel() {
     el('img-settings-enabled').checked        = s.enabled !== false;
     el('img-settings-max-dimension').value    = s.maxDimension != null ? s.maxDimension : 2400;
     el('img-settings-quality').value          = s.quality != null ? s.quality : 82;
+    el('img-settings-thumb-max-dimension').value = s.thumbMaxDimension != null ? s.thumbMaxDimension : 700;
+    el('img-settings-thumb-quality').value       = s.thumbQuality != null ? s.thumbQuality : 75;
   } catch (e) {
     el('image-settings-error').textContent = e.message || 'Failed to load image settings.';
   }
+  updateBackfillStatus();
 }
 function closeImageSettingsPanel() {
   el('image-settings-overlay').classList.remove('open');
@@ -1511,19 +1547,107 @@ async function saveImageSettingsFromPanel() {
   const enabled      = el('img-settings-enabled').checked;
   const maxDimension = parseInt(el('img-settings-max-dimension').value, 10);
   const quality       = parseInt(el('img-settings-quality').value, 10);
+  const thumbMaxDimension = parseInt(el('img-settings-thumb-max-dimension').value, 10);
+  const thumbQuality      = parseInt(el('img-settings-thumb-quality').value, 10);
 
   const btn = el('image-settings-save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
     await apiFetch('/api/paintings', {
       method: 'PATCH',
-      body:   JSON.stringify({ action: 'update-image-settings', enabled, maxDimension, quality }),
+      body:   JSON.stringify({ action: 'update-image-settings', enabled, maxDimension, quality, thumbMaxDimension, thumbQuality }),
     });
     succEl.textContent = 'Saved — applies to new uploads from now on.';
   } catch (e) {
     errEl.textContent = e.message || 'Failed to save image settings.';
   } finally {
     btn.disabled = false; btn.textContent = 'Save settings';
+  }
+}
+
+/**
+ * Reports how many of the CURRENTLY LOADED artworks' photos are missing a
+ * thumbnail (thumbnails[i] null/absent for a given images[i]) — computed
+ * client-side from the same `artworks` array the gallery already renders
+ * from, no extra request needed. Drives both the status line and the
+ * backfill button's enabled state in the Image Settings panel.
+ */
+function countMissingThumbnails() {
+  let missing = 0;
+  artworks.forEach(art => {
+    const images = Array.isArray(art.images) ? art.images : [];
+    const thumbs = Array.isArray(art.thumbnails) ? art.thumbnails : [];
+    images.forEach((url, i) => { if (url && !thumbs[i]) missing++; });
+  });
+  return missing;
+}
+
+function updateBackfillStatus() {
+  const statusEl = el('backfill-thumbnails-status');
+  const btn      = el('backfill-thumbnails-btn');
+  if (!statusEl || !btn) return;
+  const missing = countMissingThumbnails();
+  statusEl.textContent = missing > 0
+    ? missing + ' photo(s) still need a thumbnail generated.'
+    : 'All photos have thumbnails.';
+  btn.disabled = missing === 0;
+}
+
+let backfillRunning = false;
+
+/**
+ * Drives PATCH /api/paintings { action: 'backfill-thumbnails' } — see
+ * paintings.js for the server side. Loops the batched endpoint (default
+ * 8 images per call, kept small so each request stays comfortably under
+ * Vercel's serverless execution-time limit) until nothing's left,
+ * showing running progress. This is what actually shrinks Blob Data
+ * Transfer for the existing catalogue, not just new uploads — the whole
+ * reason this button exists (see the project's data-transfer fix).
+ */
+async function runBackfillThumbnails() {
+  if (backfillRunning) return;
+  backfillRunning = true;
+  const btn      = el('backfill-thumbnails-btn');
+  const statusEl = el('backfill-thumbnails-status');
+  if (btn) { btn.disabled = true; btn.textContent = 'Working…'; }
+
+  try {
+    let remaining      = Infinity;
+    let totalProcessed = 0;
+
+    while (remaining > 0) {
+      const data = await apiFetch('/api/paintings', {
+        method: 'PATCH',
+        body:   JSON.stringify({ action: 'backfill-thumbnails', batchSize: 8 }),
+      });
+      totalProcessed += data.processed || 0;
+      remaining        = data.remaining || 0;
+
+      if (statusEl) {
+        statusEl.textContent = remaining > 0
+          ? 'Generating thumbnails… ' + totalProcessed + ' done, ' + remaining + ' remaining.'
+          : 'Done — generated ' + totalProcessed + ' thumbnail(s).';
+      }
+
+      // Safety valve: if a batch makes no progress at all while work still
+      // remains, every remaining image is failing (e.g. a since-deleted
+      // blob) — stop rather than hammering the server in an endless loop.
+      // paintings.js leaves a failed image's thumbnail as null, so it's
+      // simply retried the next time this button is clicked.
+      if ((data.processed || 0) === 0 && remaining > 0) {
+        if (statusEl) statusEl.textContent += ' Some images could not be processed — please try again later.';
+        break;
+      }
+    }
+
+    await loadArtworks();
+    renderGallery();
+  } catch (e) {
+    if (statusEl) statusEl.textContent = e.message || 'Backfill failed. Please try again.';
+  } finally {
+    backfillRunning = false;
+    if (btn) btn.textContent = 'Regenerate thumbnails for existing photos';
+    updateBackfillStatus();
   }
 }
 
@@ -2202,6 +2326,7 @@ document.addEventListener('DOMContentLoaded', function() {
   wire('admin-image-settings-btn', 'click', openImageSettingsPanel);
   wire('image-settings-close-btn', 'click', closeImageSettingsPanel);
   wire('image-settings-save-btn',  'click', saveImageSettingsFromPanel);
+  wire('backfill-thumbnails-btn',  'click', runBackfillThumbnails);
   wire('artist-photo-upload-btn','click', function() { el('artist-photo-file').click(); });
   wire('artist-photo-file',      'change', handleArtistPhotoUpload);
   wire('artist-photo-remove-btn','click', removeArtistPhoto);
