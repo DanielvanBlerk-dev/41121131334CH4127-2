@@ -2329,7 +2329,7 @@ async function initWallets() {
     await walletGooglePay.attach('#google-pay-button', { buttonColor: 'black', buttonType: 'pay', buttonSizeMode: 'fill' });
     const box = el('google-pay-button');
     box.classList.remove('hidden');
-    box.addEventListener('click', e => handleWalletPayment(e, walletGooglePay));
+    box.addEventListener('click', e => handleWalletPayment(e, walletGooglePay), true);
     anyWallet = true;
   } catch (e) { walletGooglePay = null; console.info('Google Pay not available:', e && e.message); }
 
