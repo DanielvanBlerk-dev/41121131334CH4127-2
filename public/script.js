@@ -2322,7 +2322,7 @@ async function initWallets() {
     btn.classList.remove('hidden');
     btn.addEventListener('click', e => handleWalletPayment(e, walletApplePay));
     anyWallet = true;
-  } catch (e) { walletApplePay = null; }
+  } catch (e) { walletApplePay = null; console.info('Apple Pay not available:', e && e.message); }
 
   try {
     walletGooglePay = await squarePayments.googlePay(walletPaymentRequest);
@@ -2331,7 +2331,7 @@ async function initWallets() {
     box.classList.remove('hidden');
     box.addEventListener('click', e => handleWalletPayment(e, walletGooglePay));
     anyWallet = true;
-  } catch (e) { walletGooglePay = null; }
+  } catch (e) { walletGooglePay = null; console.info('Google Pay not available:', e && e.message); }
 
   if (anyWallet) el('wallet-pay-section').classList.remove('hidden');
   syncWalletTotal();
