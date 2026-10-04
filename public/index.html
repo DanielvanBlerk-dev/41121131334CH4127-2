@@ -140,12 +140,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 
   <!-- ── STYLES ─────────────────────────────────────────────────────────── -->
-  <link rel="stylesheet" href="style.css?v=11">
+  <link rel="stylesheet" href="style.css?v=23">
 
   <!-- ── SQUARE + APP SCRIPTS ──────────────────────────────────────────── -->
   <script src="https://web.squarecdn.com/v1/square.js" defer></script>
   <script src="square-config.js?v=6" defer></script>
-  <script src="script.js?v=11" defer></script>
+  <script src="script.js?v=23" defer></script>
 
   <script>
     window.va = window.va || function () {
@@ -165,6 +165,7 @@
     </div>
     <div class="admin-bar-actions">
       <button class="admin-btn" id="admin-orders-btn">Orders</button>
+      <button class="admin-btn" id="admin-analytics-btn">Analytics</button>
       <button class="admin-btn" id="admin-image-settings-btn">Image settings</button>
       <button class="admin-btn" id="admin-add-btn">+ Add painting</button>
       <button class="admin-btn danger" id="admin-logout-btn">Log out</button>
@@ -175,9 +176,9 @@
   <nav role="navigation" aria-label="Main">
     <a href="#" class="nav-logo">Airlie Beach Art</a>
     <div class="nav-right">
-      <a href="#seascapes" class="nav-link">Seascapes</a>
-      <a href="#figurative" class="nav-link">Figurative</a>
+      <a href="#gallery" class="nav-link">Gallery</a>
       <a href="#commissions" class="nav-link">Commissions</a>
+      <a href="#about" class="nav-link">About</a>
       <a href="#contact" class="nav-link">Contact</a>
       <a href="#" class="nav-link" id="admin-nav-link" title="Owner login" aria-label="Owner login">&#9679;</a>
       <button class="cart-btn" id="cart-toggle-btn" aria-label="Open cart">
@@ -212,7 +213,48 @@
     <div class="announcement-inner">
       <p class="announcement-headline">The Night Sea Collection is live</p>
       <p class="announcement-body">Nine original oil paintings and fine art prints exploring the idea of light finding its way through darkness. View the full collection below.</p>
-      <a href="#seascapes" class="announcement-cta">View the Collection</a>
+      <p class="announcement-note">Print run closes 19 October.</p>
+      <a href="#gallery" class="announcement-cta">View the Collection</a>
+    </div>
+  </section>
+
+  <!-- ── GALLERY ────────────────────────────────────────────────────────── -->
+  <section class="section gallery-section" id="gallery" aria-label="Gallery">
+    <div class="gallery-section-header">
+      <h2 class="gallery-section-title">Airlie Beach Art — Original Paintings</h2>
+      <p class="gallery-section-body">Michael's work moves between two disciplines, united by a single idea: light finding its way through darkness. His seascapes explore moonlit cloud, storm-lit water and the particular quiet of the sea after dark, painted alla prima in the tradition of 19th-century marine painters like Aivazovsky. His figurative paintings turn the same idea toward the human figure, in the tenebrist tradition of Caravaggio, Rembrandt and Rubens, engaging directly with sacred and theological subjects drawn from Scripture and church history.</p>
+      <p class="gallery-section-body">Original works are available for sale in a range of sizes. Commissions, including ecclesiastical and private commissions, are welcomed and quoted individually &mdash; contact Michael to discuss your project.</p>
+      <p class="gallery-section-note"><em>All works are original oil on canvas. Prices are listed per work in Australian dollars (AUD); the US dollar figure is an approximate guide only. Commission inquiries welcome.</em></p>
+    </div>
+    <!--
+      COLLECTIONS FILTER BAR
+      Populated by script.js from whatever collection names actually
+      appear among the current listings (plus an "All" pill). Empty/hidden
+      when no listing has a collection assigned. Purely client-side
+      filtering — no reload, no server call.
+    -->
+    <div class="collections-filter-bar hidden" id="collections-filter"></div>
+    <div class="gallery" id="gallery-grid"></div>
+  </section>
+
+  <!-- ── COMMISSIONS ────────────────────────────────────────────────────── -->
+  <section class="section commissions-section" id="commissions" aria-label="Commissions">
+    <div class="section-header">
+      <h2 class="section-title">Commissions</h2>
+    </div>
+    <div class="commissions-body">
+      <p class="commissions-intro">Michael accepts commissions in both his seascape and figurative disciplines.</p>
+      <div class="commissions-grid">
+        <div class="commission-block">
+          <h3 class="commission-block-title">Seascape Commissions</h3>
+          <p class="commission-block-body">Bring a photograph, a location, or simply a mood you'd like captured, and Michael will paint it. Quoted based on size and complexity.</p>
+        </div>
+        <div class="commission-block">
+          <h3 class="commission-block-title">Figurative &amp; Devotional Commissions</h3>
+          <p class="commission-block-body">Sacred subjects, theological narratives, portraits in the classical tradition. Each commission is discussed individually to ensure the work serves its intended space and purpose. Ecclesiastical commissions particularly welcome.</p>
+        </div>
+      </div>
+      <p class="commissions-cta">To inquire about a commission, contact Michael directly. All commissions are quoted individually.</p>
     </div>
   </section>
 
@@ -239,64 +281,11 @@
         <p class="about-para">Michael van Blerk is a self-taught oil painter based in Airlie Beach, Queensland, working in two distinct disciplines — atmospheric seascape and classical figurative painting — united by a single preoccupation: the way light finds its way through darkness.</p>
         <p class="about-para">His seascape work explores nocturnal and storm-lit water, painted alla prima, in the tradition of 19th-century marine painters like Aivazovsky. His figurative work is painted in the tradition of the Baroque masters — dark, psychologically intense oil paintings exploring sacred and theological subjects with unflinching seriousness and emotional weight.</p>
         <p class="about-para">Michael exhibits locally and regionally and accepts commissions in both disciplines.</p>
+        <ul class="about-credits">
+          <li>Finalist, 2026 Great Barrier Reef Festival Art Exhibition. First place in the Proserpine Show.</li>
+          <li>Quality &amp; satisfaction guarantee on every work.</li>
+        </ul>
       </div>
-    </div>
-  </section>
-
-  <!-- ── SEASCAPES GALLERY ──────────────────────────────────────────────── -->
-  <section class="section gallery-section" id="seascapes" aria-label="Whitsunday Seascapes">
-    <div class="gallery-section-header">
-      <h2 class="gallery-section-title">Airlie Beach Art — Whitsunday Seascapes</h2>
-      <p class="gallery-section-body">Michael's seascape work explores water and sky as a study in contrast — moonlit cloud, storm-lit water, and the particular quiet of the sea after dark.</p>
-      <p class="gallery-section-body">Painted alla prima, wet-on-wet, in a single sustained session, these works draw on the tradition of 19th-century marine painters like Aivazovsky, capturing the moment light breaks through weather rather than the calm of a settled day.</p>
-      <p class="gallery-section-body">Based in the Whitsundays but not limited to it, this is a continuing exploration of the sea in all its moods.</p>
-      <p class="gallery-section-body">Available as original oil on canvas in a range of sizes. Commissions welcome — whether you have a specific scene in mind, or simply want to discuss a mood you'd like captured.</p>
-    </div>
-    <!--
-      COLLECTIONS FILTER BAR
-      Populated by script.js from whatever collection names actually
-      appear among this category's current listings (plus an "All"
-      pill). Empty/hidden when no listing in this category has a
-      collection assigned. Purely client-side filtering — no reload,
-      no server call.
-    -->
-    <div class="collections-filter-bar hidden" id="collections-filter-seascapes"></div>
-    <div class="gallery" id="gallery-seascapes"></div>
-  </section>
-
-  <!-- ── FIGURATIVE GALLERY ─────────────────────────────────────────────── -->
-  <section class="section gallery-section figurative-section" id="figurative" aria-label="Figurative Work">
-    <div class="gallery-section-header">
-      <h2 class="gallery-section-title">Figurative Work</h2>
-      <p class="gallery-section-body">Where the seascapes explore light breaking through storm and cloud, this body of work turns the same idea toward the human figure — divine light set against profound darkness, in the tenebrist tradition of the great Baroque painters: Caravaggio, Rembrandt, Rubens, who understood that the most profound human experiences demand to be painted with weight, darkness, and unflinching honesty.</p>
-      <p class="gallery-section-body">Michael's figurative paintings engage directly with sacred and theological subjects drawn from Scripture, church history, and the great narrative tradition of Western devotional art. These are not decorative works. They are paintings that ask something of the viewer — attention, stillness, and a willingness to sit with difficult and beautiful things simultaneously.</p>
-      <p class="gallery-section-body">Current and recent bodies of work include <em>Behold the Man</em>, a Lenten series on the Passion narrative, and <em>The Expulsion</em>, a large-format treatment of the Fall of Man that places Adam and Eve at the threshold between paradise and the world.</p>
-      <p class="gallery-section-body">These works are painted for spaces that can hold them — private collections, sacred spaces, and serious collectors of figurative and devotional art.</p>
-      <p class="gallery-section-body">Original works are available for sale. Ecclesiastical and private commissions are welcomed and quoted individually — contact Michael to discuss your project.</p>
-      <p class="gallery-section-note"><em>All works are original oil on canvas. Prices listed per work. Commission inquiries welcome.</em></p>
-    </div>
-    <div class="collections-filter-bar hidden" id="collections-filter-figurative"></div>
-    <div class="gallery" id="gallery-figurative"></div>
-  </section>
-
-  <!-- ── COMMISSIONS ────────────────────────────────────────────────────── -->
-  <section class="section commissions-section" id="commissions" aria-label="Commissions">
-    <div class="section-header">
-      <h2 class="section-title">Commissions</h2>
-    </div>
-    <div class="commissions-body">
-      <p class="commissions-intro">Michael accepts commissions in both his seascape and figurative disciplines.</p>
-      <div class="commissions-grid">
-        <div class="commission-block">
-          <h3 class="commission-block-title">Seascape Commissions</h3>
-          <p class="commission-block-body">Bring a photograph, a location, or simply a mood you'd like captured, and Michael will paint it. Quoted based on size and complexity.</p>
-        </div>
-        <div class="commission-block">
-          <h3 class="commission-block-title">Figurative &amp; Devotional Commissions</h3>
-          <p class="commission-block-body">Sacred subjects, theological narratives, portraits in the classical tradition. Each commission is discussed individually to ensure the work serves its intended space and purpose. Ecclesiastical commissions particularly welcome.</p>
-        </div>
-      </div>
-      <p class="commissions-cta">To inquire about a commission, contact Michael directly. All commissions are quoted individually.</p>
     </div>
   </section>
 
@@ -340,6 +329,16 @@
     </div>
   </section>
 
+  <!-- ── ANALYTICS MODAL (admin) ───────────────────────────────────────── -->
+  <div class="analytics-overlay" id="analytics-overlay" role="dialog" aria-modal="true" aria-label="Analytics">
+    <div class="analytics-box">
+      <h2 class="analytics-title">Analytics</h2>
+      <p class="analytics-sub">How visitors move through the shop, from first click to confirmed purchase.</p>
+      <div id="analytics-body"></div>
+      <button class="login-cancel" id="analytics-close-btn">Close</button>
+    </div>
+  </div>
+
   <!-- ── FOOTER ────────────────────────────────────────────────────────── -->
   <footer role="contentinfo">
     <span class="footer-logo">Airlie Beach Art</span>
@@ -366,7 +365,7 @@
     <div class="cart-footer">
       <div class="cart-total">
         <span class="cart-total-label">Total</span>
-        <span class="cart-total-amount" id="cart-total">$0</span>
+        <span class="cart-total-amount" id="cart-total">AUD $0</span>
       </div>
       <button class="checkout-btn" id="checkout-btn" disabled>Proceed to Checkout</button>
     </div>
@@ -433,6 +432,11 @@
               -->
               <select id="country" autocomplete="country">
                 <option value="AU" selected>Australia</option>
+                <option value="US">United States</option>
+                <option value="GB">United Kingdom</option>
+                <option value="CA">Canada</option>
+                <option value="NZ">New Zealand</option>
+                <option disabled>──────────</option>
                 <option value="AF">Afghanistan</option>
                 <option value="AL">Albania</option>
                 <option value="DZ">Algeria</option>
@@ -462,7 +466,6 @@
                 <option value="BI">Burundi</option>
                 <option value="KH">Cambodia</option>
                 <option value="CM">Cameroon</option>
-                <option value="CA">Canada</option>
                 <option value="CV">Cape Verde</option>
                 <option value="CF">Central African Republic</option>
                 <option value="TD">Chad</option>
@@ -557,7 +560,6 @@
                 <option value="NR">Nauru</option>
                 <option value="NP">Nepal</option>
                 <option value="NL">Netherlands</option>
-                <option value="NZ">New Zealand</option>
                 <option value="NI">Nicaragua</option>
                 <option value="NE">Niger</option>
                 <option value="NG">Nigeria</option>
@@ -619,8 +621,6 @@
                 <option value="UG">Uganda</option>
                 <option value="UA">Ukraine</option>
                 <option value="AE">United Arab Emirates</option>
-                <option value="GB">United Kingdom</option>
-                <option value="US">United States</option>
                 <option value="UY">Uruguay</option>
                 <option value="UZ">Uzbekistan</option>
                 <option value="VU">Vanuatu</option>
@@ -636,10 +636,7 @@
         </div>
         <div class="form-section">
           <div class="form-section-title">Postage</div>
-          <p class="postage-intro" id="postage-intro">Uses the postcode from your shipping address above — click Calculate to see shipping options.</p>
-          <div class="postage-input-row" id="postage-input-row">
-            <button class="postage-calc-btn" id="postage-calc-btn">Calculate</button>
-          </div>
+          <p class="postage-intro" id="postage-intro">Shipping options appear automatically once you enter your postcode in the shipping address above.</p>
           <div class="postage-result" id="postage-result" aria-live="polite"></div>
 
           <!--
@@ -660,6 +657,18 @@
 
         <div class="form-section">
           <div class="form-section-title">Payment</div>
+          <!--
+            DIGITAL WALLETS — Apple Pay / Google Pay (Square Web Payments SDK).
+            Hidden until initSquare() confirms the buyer's device/browser can
+            actually use each one, so unsupported visitors just see the card
+            form exactly as before. Both buttons run the same form + postage
+            checks as "Complete Purchase" before opening the wallet sheet.
+          -->
+          <div class="wallet-pay-section hidden" id="wallet-pay-section">
+            <button type="button" class="apple-pay-button hidden" id="apple-pay-button" aria-label="Pay with Apple Pay"></button>
+            <div class="google-pay-button hidden" id="google-pay-button"></div>
+            <p class="wallet-divider"><span>or pay by card</span></p>
+          </div>
           <div id="card-container"></div>
           <p class="sq-card-message">Payments processed securely by Square. We never store your card details.</p>
           <p class="payment-error" id="payment-error" role="alert"></p>
@@ -669,7 +678,7 @@
       <div class="success-state" id="success-state" role="status">
         <div class="success-icon" aria-hidden="true">&#10022;</div>
         <h2 class="success-title">Thank you.</h2>
-        <p class="success-sub">Your order has been confirmed and payment received.<br>A confirmation has been sent to your email.<br>Your artwork will be carefully packaged and shipped within 5&#8209;7 business days.</p>
+        <p class="success-sub">Your order has been confirmed and payment received.<br>A confirmation has been sent to your email.<br>Your artwork will be carefully packaged and shipped within 1&#8209;2 weeks.</p>
         <p class="success-order" id="success-order-id"></p>
         <button class="success-continue" id="success-continue-btn">Continue Browsing</button>
       </div>

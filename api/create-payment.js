@@ -548,6 +548,12 @@ export default async function handler(req, res) {
     await redis.set(`order:${orderId}`, JSON.stringify(orderRecord), { ex: 90 * 24 * 60 * 60 });
     await redis.lpush('order-index', orderId);
     await redis.ltrim('order-index', 0, 499);
+
+    // Funnel analytics — final step ("purchase confirmed"). Server-side only,
+    // after Square has actually taken the payment (see api/track.js). Never
+    // allowed to affect the order if the counter write fails.
+    try { await redis.hincrby('analytics:events', 'purchase_confirmed', 1); }
+    catch (e) { console.warn('analytics counter failed:', e.message); }
  
     // ── Send purchase notification to admin ───────────────────────────────
     // AWAITED, not fire-and-forget. It was fire-and-forget originally (to

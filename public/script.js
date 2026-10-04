@@ -98,9 +98,8 @@ let pendingGelatoPreviewUrl = null; // staged Gelato product preview image — s
                                      // Gelato" result, sent as gelatoPreviewUrl on save so the server can
                                      // download it and use it as this listing's own photo (see paintings.js)
 
-// Public gallery collection filter — null means "All". Keyed by category
-// so the two galleries filter independently of each other.
-let activeCollectionFilter = { seascape: null, figurative: null };
+// Public gallery collection filter — null means "All".
+let activeCollectionFilter = null;
 
 // Lightbox state
 let lightboxImages = [];
@@ -124,6 +123,47 @@ function formatBytes(bytes) {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+/**
+ * Approximate USD conversion shown beside AUD prices. USD_PER_AUD is a fixed
+ * display-only rate (about 0.70 as of early Oct 2026) — customers are still
+ * charged in AUD; update this one number whenever the rate drifts noticeably.
+ */
+const USD_PER_AUD = 0.695;
+
+function usdApprox(aud) {
+  const n = Number(aud);
+  if (!Number.isFinite(n)) return '';
+  return '\u2248 US$' + Math.round(n * USD_PER_AUD).toLocaleString();
+}
+
+/** A small "≈ US$123" span to sit beside an AUD price. */
+function usdSpan(aud) {
+  const span = document.createElement('span');
+  span.className = 'price-usd';
+  span.textContent = usdApprox(aud);
+  return span;
+}
+
+/* ─── EVENT TRACKING ──────────────────────────────────────────────────────── */
+/**
+ * Fire-and-forget funnel counter (see api/track.js). Skipped entirely for a
+ * signed-in admin so Michael's own clicking doesn't inflate the totals, and
+ * wrapped so a tracking failure can never affect the shop.
+ * Events: listing_click, size_select, add_to_cart, shipping_calc, checkout_start
+ * ('purchase_confirmed' is recorded server-side in create-payment.js).
+ */
+function trackEvent(event) {
+  try {
+    if (isAdmin) return;
+    fetch('/api/track', {
+      method:    'POST',
+      keepalive: true,
+      headers:   { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      body:      JSON.stringify({ event }),
+    }).catch(() => {});
+  } catch { /* never let tracking break the page */ }
 }
 
 /* ─── API HELPERS ─────────────────────────────────────────────────────────── */
@@ -361,7 +401,7 @@ function renderCardContent(card, group) {
     imgWrap.innerHTML = art.svg;
   }
 
-  if (heroUrl) imgWrap.addEventListener('click', () => openLightbox(art));
+  if (heroUrl) imgWrap.addEventListener('click', () => { trackEvent('listing_click'); openLightbox(art); });
 
   if (art.images && art.images.length > 1) {
     const badge = document.createElement('span');
@@ -379,7 +419,7 @@ function renderCardContent(card, group) {
 
   const labelRow = document.createElement('div'); labelRow.className = 'artwork-label';
   const titleEl  = document.createElement('span'); titleEl.className  = 'artwork-title'; titleEl.textContent = art.title || 'Untitled';
-  const priceEl  = document.createElement('span'); priceEl.className  = 'artwork-price'; priceEl.textContent = 'AUD $' + (art.price || 0).toLocaleString();
+  const priceEl  = document.createElement('span'); priceEl.className  = 'artwork-price'; priceEl.textContent = 'AUD $' + (art.price || 0).toLocaleString(); priceEl.appendChild(usdSpan(art.price || 0));
   labelRow.appendChild(titleEl); labelRow.appendChild(priceEl);
 
   const mediumEl = document.createElement('div'); mediumEl.className = 'artwork-medium'; mediumEl.textContent = art.medium || '';
@@ -407,6 +447,7 @@ function renderCardContent(card, group) {
       pill.className = 'size-pill' + (variant.id === art.id ? ' active' : '');
       pill.textContent = variant.variantLabel || 'Option';
       pill.addEventListener('click', () => {
+        trackEvent('size_select');
         activeVariantByGroup[variant.printGroupId] = variant.id;
         renderCardContent(card, group);
       });
@@ -502,7 +543,12 @@ function populateGrid(gridEl, groups) {
  * earliest, since grouping (below) runs over this already-sorted array.
  */
 function sortByOrder(items) {
-  return [...items].sort((a, b) => (a.order ?? a.id ?? 0) - (b.order ?? b.id ?? 0));
+  // Tie-break (equal order values, e.g. legacy per-category indexes before the
+  // first reorder in the unified gallery): seascapes first, then by id.
+  return [...items].sort((a, b) =>
+    ((a.order ?? a.id ?? 0) - (b.order ?? b.id ?? 0)) ||
+    ((a.category === 'figurative') - (b.category === 'figurative')) ||
+    ((a.id ?? 0) - (b.id ?? 0)));
 }
 
 /**
@@ -510,8 +556,8 @@ function sortByOrder(items) {
  * grouped card is kept if ANY of its variants carry the active
  * collection, so filtering happens on the flat item list before grouping.
  */
-function filterByActiveCollection(category, items) {
-  const active = activeCollectionFilter[category];
+function filterByActiveCollection(items) {
+  const active = activeCollectionFilter;
   if (!active) return items;
   return items.filter(a => Array.isArray(a.collections) && a.collections.includes(active));
 }
@@ -523,16 +569,8 @@ function filterByActiveCollection(category, items) {
  * the bar itself always shows every available option). Hides the whole
  * bar when no listing in the category has a collection assigned.
  */
-// Filter-bar element ids don't follow a uniform plural rule (matching the
-// pre-existing #gallery-seascapes / #gallery-figurative asymmetry in
-// index.html), so map explicitly rather than string-concatenating.
-const COLLECTIONS_FILTER_BAR_IDS = {
-  seascape:   'collections-filter-seascapes',
-  figurative: 'collections-filter-figurative',
-};
-
-function renderCollectionsFilterBar(category, items) {
-  const barEl = el(COLLECTIONS_FILTER_BAR_IDS[category]);
+function renderCollectionsFilterBar(items) {
+  const barEl = el('collections-filter');
   if (!barEl) return;
 
   const names = new Set();
@@ -541,28 +579,27 @@ function renderCollectionsFilterBar(category, items) {
   if (names.size === 0) {
     barEl.classList.add('hidden');
     barEl.innerHTML = '';
-    activeCollectionFilter[category] = null;
+    activeCollectionFilter = null;
     return;
   }
 
-  // If the previously active filter no longer exists in this category
-  // (e.g. the last painting carrying it was edited/deleted), fall back
-  // to "All" rather than showing an empty gallery silently.
-  if (activeCollectionFilter[category] && !names.has(activeCollectionFilter[category])) {
-    activeCollectionFilter[category] = null;
+  // If the previously active filter no longer exists (e.g. the last painting
+  // carrying it was edited/deleted), fall back to "All".
+  if (activeCollectionFilter && !names.has(activeCollectionFilter)) {
+    activeCollectionFilter = null;
   }
 
   barEl.classList.remove('hidden');
   barEl.innerHTML = '';
 
-  const active = activeCollectionFilter[category];
+  const active = activeCollectionFilter;
   const makePill = (label, value) => {
     const pill = document.createElement('button');
     pill.type = 'button';
     pill.className = 'collection-pill' + (active === value ? ' active' : '');
     pill.textContent = label;
     pill.addEventListener('click', () => {
-      activeCollectionFilter[category] = value;
+      activeCollectionFilter = value;
       renderGallery();
     });
     return pill;
@@ -574,17 +611,10 @@ function renderCollectionsFilterBar(category, items) {
 
 function renderGallery() {
   try {
-    const seascapes  = artworks.filter(a => a && a.category === 'seascape');
-    const figurative = artworks.filter(a => a && (a.category === 'figurative' || !a.category));
-
-    renderCollectionsFilterBar('seascape',   seascapes);
-    renderCollectionsFilterBar('figurative', figurative);
-
-    const seascapesShown   = sortByOrder(filterByActiveCollection('seascape',   seascapes));
-    const figurativeShown  = sortByOrder(filterByActiveCollection('figurative', figurative));
-
-    populateGrid(el('gallery-seascapes'),  groupArtworksByPrintGroup(seascapesShown));
-    populateGrid(el('gallery-figurative'), groupArtworksByPrintGroup(figurativeShown));
+    const all   = artworks.filter(Boolean);
+    renderCollectionsFilterBar(all);
+    const shown = sortByOrder(filterByActiveCollection(all));
+    populateGrid(el('gallery-grid'), groupArtworksByPrintGroup(shown));
   } catch (e) {
     console.error('renderGallery failed:', e);
   }
@@ -1345,6 +1375,7 @@ async function saveNewPainting() {
 function addToCart(id) {
   const art = artworks.find(a => a.id === id);
   if (!art || art.sold || art.oversized || inCart(id)) return;
+  trackEvent('add_to_cart');
   cart.push(art); updateCartUI(); renderGallery(); openCart();
 }
 function removeFromCart(id) {
@@ -1359,6 +1390,7 @@ function updateCartUI() {
     el('checkout-btn').disabled  = count === 0;
     const total = cart.reduce((s, i) => s + i.price, 0);
     el('cart-total').textContent = 'AUD $' + total.toLocaleString();
+    el('cart-total').appendChild(usdSpan(total));
 
     const itemsEl = el('cart-items');
     const emptyEl = el('cart-empty');
@@ -1392,7 +1424,7 @@ function updateCartUI() {
       info.appendChild(nameEl); info.appendChild(metaEl); info.appendChild(removeBtn);
 
       const priceEl = document.createElement('div'); priceEl.className = 'cart-item-price';
-      priceEl.textContent = '$' + art.price.toLocaleString();
+      priceEl.textContent = 'AUD $' + art.price.toLocaleString(); priceEl.appendChild(usdSpan(art.price));
 
       item.appendChild(thumb); item.appendChild(info); item.appendChild(priceEl);
       frag.appendChild(item);
@@ -1432,6 +1464,7 @@ function appendPostageLine(summaryEl, quote, pendingLabel) {
   if (!quote) label.style.color = 'var(--gold)';
   const price = document.createElement('span');
   price.textContent = quote ? 'AUD $' + quote.price.toFixed(2) : '—';
+  if (quote) price.appendChild(usdSpan(quote.price));
   row.appendChild(label); row.appendChild(price);
   summaryEl.appendChild(row);
 }
@@ -1450,7 +1483,7 @@ function buildOrderSummary() {
     const nameSpan = document.createElement('span');
     const em = document.createElement('em'); em.textContent = a.title;
     nameSpan.appendChild(em);
-    const priceSpan = document.createElement('span'); priceSpan.textContent = 'AUD $' + a.price.toLocaleString();
+    const priceSpan = document.createElement('span'); priceSpan.textContent = 'AUD $' + a.price.toLocaleString(); priceSpan.appendChild(usdSpan(a.price));
     row.appendChild(nameSpan); row.appendChild(priceSpan);
     summaryEl.appendChild(row);
   });
@@ -1459,8 +1492,9 @@ function buildOrderSummary() {
   if (sources.has('gelato'))  appendPostageLine(summaryEl, selectedGelatoPostage, 'Print Shipping (select below)');
 
   const totalRow = document.createElement('div'); totalRow.className = 'order-line total';
-  totalRow.innerHTML = '<strong>Total</strong><strong>AUD $' + grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</strong>';
+  totalRow.innerHTML = '<strong>Total</strong><strong>AUD $' + grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '<span class="price-usd">' + usdApprox(grandTotal) + '</span></strong>';
   summaryEl.appendChild(totalRow);
+  syncWalletTotal();
 }
 
 function updateOrderSummary() { buildOrderSummary(); }
@@ -1476,6 +1510,7 @@ function updateGelatoPostageVisibility() {
 }
 
 async function openCheckout() {
+  trackEvent('checkout_start');
   closeCart(); document.body.style.overflow = 'hidden';
   buildOrderSummary();
   el('checkout-modal').classList.add('open');
@@ -1491,6 +1526,8 @@ function closeCheckout() {
   el('gelato-postage-result').innerHTML = '';
   selectedPostage = null;
   selectedGelatoPostage = null;
+  lastPostageKey = null;
+  clearTimeout(autoPostageTimer);
   document.body.style.overflow = '';
 }
 
@@ -1651,6 +1688,49 @@ async function runBackfillThumbnails() {
   }
 }
 
+/* ─── ANALYTICS PANEL (admin) ─────────────────────────────────────────────── */
+const FUNNEL_LABELS = [
+  ['listing_click',      'Listings clicked'],
+  ['size_select',        'Print size selections'],
+  ['add_to_cart',        'Added to selection'],
+  ['shipping_calc',      'Shipping calculated'],
+  ['checkout_start',     'Checkout entered'],
+  ['purchase_confirmed', 'Purchases confirmed'],
+];
+
+async function openAnalyticsPanel() {
+  el('analytics-overlay').classList.add('open');
+  const body = el('analytics-body');
+  body.innerHTML = '<p class="analytics-note">Loading…</p>';
+  try {
+    const data   = await apiFetch('/api/track');
+    const totals = data.totals || {};
+    body.innerHTML = '';
+    FUNNEL_LABELS.forEach(([key, label], i) => {
+      const count = Number(totals[key]) || 0;
+      const prev  = i > 0 ? Number(totals[FUNNEL_LABELS[i - 1][0]]) || 0 : 0;
+      const row = document.createElement('div'); row.className = 'analytics-row';
+      const name = document.createElement('span'); name.className = 'analytics-label'; name.textContent = (i + 1) + '. ' + label;
+      const num  = document.createElement('span'); num.className = 'analytics-count'; num.textContent = count.toLocaleString();
+      row.appendChild(name); row.appendChild(num);
+      if (i > 0 && prev > 0) {
+        const pct = document.createElement('span'); pct.className = 'analytics-pct';
+        pct.textContent = Math.round((count / prev) * 100) + '% of previous step';
+        row.appendChild(pct);
+      }
+      body.appendChild(row);
+    });
+    const note = document.createElement('p'); note.className = 'analytics-note';
+    note.textContent = 'Running totals since tracking began. Counts are events, not unique visitors, and your own clicks while signed in as admin are not counted.';
+    body.appendChild(note);
+  } catch (e) {
+    body.innerHTML = '';
+    const err = document.createElement('p'); err.className = 'analytics-note'; err.textContent = e.message || 'Could not load analytics.';
+    body.appendChild(err);
+  }
+}
+function closeAnalyticsPanel() { el('analytics-overlay').classList.remove('open'); }
+
 async function renderOrders() {
   const body = el('orders-panel-body');
   body.innerHTML = '<div class="orders-loading">Loading orders…</div>';
@@ -1749,6 +1829,23 @@ function getSelectedCountry() {
  * Called when the country dropdown changes, and once when checkout opens
  * so the section reflects whatever was already selected.
  */
+function preselectCountryFromBrowser() {
+  const select = el('country');
+  if (!select) return;
+  const langs = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language];
+  for (const tag of langs) {
+    const m = /^[a-z]{2,3}[-_]([A-Za-z]{2})\b/.exec(tag || '');
+    if (!m) continue;
+    const code = m[1].toUpperCase();
+    const opt = Array.from(select.options).find(o => o.value === code && !o.disabled);
+    if (opt) {
+      select.value = code;
+      updatePostageSectionForCountry();
+      return;
+    }
+  }
+}
+
 function updatePostageSectionForCountry() {
   const { code, name } = getSelectedCountry();
   const isIntl = code !== 'AU';
@@ -1756,11 +1853,12 @@ function updatePostageSectionForCountry() {
   const intro = el('postage-intro');
   if (intro) {
     intro.textContent = isIntl
-      ? 'Postage to ' + name + ' will be calculated based on Australia Post international rates. Click Calculate to see options.'
-      : 'Uses the postcode from your shipping address above — click Calculate to see shipping options.';
+      ? 'Postage to ' + name + ' is calculated automatically from Australia Post international rates.'
+      : 'Shipping options appear automatically once you enter your postcode in the shipping address above.';
   }
 
   // Clear any previous quotes — the destination has changed
+  lastPostageKey = null;
   selectedPostage = null;
   selectedGelatoPostage = null;
   const resultEl = el('postage-result');
@@ -1769,6 +1867,7 @@ function updatePostageSectionForCountry() {
   if (gelatoResultEl) gelatoResultEl.innerHTML = '';
   updateGelatoPostageVisibility();
   updateOrderSummary();
+  scheduleAutoPostage();   // no-op unless checkout is open with items in the cart
 }
 
 /**
@@ -1801,7 +1900,7 @@ function renderAusPostServices(data, resultEl, isIntl, countryName, postcode, it
       const nameSpan = document.createElement('span'); nameSpan.className = 'postage-service-name'; nameSpan.textContent = s.name;
       const detailsSpan = document.createElement('span'); detailsSpan.className = 'postage-service-details';
       if (s.deliveryTime) { const d = document.createElement('span'); d.className = 'postage-delivery'; d.textContent = s.deliveryTime; detailsSpan.appendChild(d); }
-      const priceSpan = document.createElement('span'); priceSpan.className = 'postage-price'; priceSpan.textContent = 'AUD $' + s.price.toFixed(2);
+      const priceSpan = document.createElement('span'); priceSpan.className = 'postage-price'; priceSpan.textContent = 'AUD $' + s.price.toFixed(2); priceSpan.appendChild(usdSpan(s.price));
       detailsSpan.appendChild(priceSpan);
       label.appendChild(radio); label.appendChild(nameSpan); label.appendChild(detailsSpan);
       servicesWrap.appendChild(label);
@@ -1850,7 +1949,7 @@ function renderGelatoServices(data, resultEl) {
       const nameSpan = document.createElement('span'); nameSpan.className = 'postage-service-name'; nameSpan.textContent = s.name;
       const detailsSpan = document.createElement('span'); detailsSpan.className = 'postage-service-details';
       if (s.deliveryTime) { const d = document.createElement('span'); d.className = 'postage-delivery'; d.textContent = s.deliveryTime; detailsSpan.appendChild(d); }
-      const priceSpan = document.createElement('span'); priceSpan.className = 'postage-price'; priceSpan.textContent = 'AUD $' + s.price.toFixed(2);
+      const priceSpan = document.createElement('span'); priceSpan.className = 'postage-price'; priceSpan.textContent = 'AUD $' + s.price.toFixed(2); priceSpan.appendChild(usdSpan(s.price));
       detailsSpan.appendChild(priceSpan);
       label.appendChild(radio); label.appendChild(nameSpan); label.appendChild(detailsSpan);
       servicesWrap.appendChild(label);
@@ -1866,12 +1965,63 @@ function renderGelatoServices(data, resultEl) {
   }
 }
 
-async function calculatePostage() {
+/**
+ * Automatic shipping calculation (Task 9). Shipping is now quoted as soon as
+ * the buyer has typed enough — a complete postcode for domestic orders, a
+ * chosen country for international ones, plus name/address/city for print
+ * (Gelato) items, which Gelato needs to quote. The old Calculate button has
+ * been removed; pressing Enter in the postcode field still forces a quote.
+ *
+ *   postageRequestSeq — only the latest request may render, so a slow reply
+ *                        for an older postcode can't overwrite a newer quote.
+ *   lastPostageKey     — fingerprint of what was last quoted; identical inputs
+ *                        aren't re-quoted, and when the inputs change any
+ *                        previously selected quote is cleared immediately so
+ *                        a stale quote can never be paid against.
+ */
+let postageRequestSeq = 0;
+let lastPostageKey    = null;
+let autoPostageTimer  = null;
+
+function checkoutIsOpen() {
+  const m = document.getElementById('checkout-modal');
+  return !!(m && m.classList.contains('open'));
+}
+
+function currentPostageKey() {
+  const { code } = getSelectedCountry();
+  const hasGelato = cart.some(a => a.source === 'gelato');
+  // International Australia Post quotes are by country + weight only, so the
+  // postcode only matters for domestic orders and for print (Gelato) items.
+  const postcodeMatters = code === 'AU' || hasGelato;
+  const parts = [code, postcodeMatters ? fieldVal('postcode') : '', cart.map(a => a.id).sort().join(',')];
+  if (hasGelato) parts.push(fieldVal('first-name'), fieldVal('last-name'), fieldVal('address'), fieldVal('city'), fieldVal('state'));
+  return JSON.stringify(parts);
+}
+
+function scheduleAutoPostage() {
+  if (!checkoutIsOpen() || cart.length === 0) return;
+
+  if (currentPostageKey() !== lastPostageKey) {
+    // Inputs changed since the last quote — drop the old quote and options.
+    if (selectedPostage || selectedGelatoPostage || lastPostageKey) {
+      selectedPostage = null; selectedGelatoPostage = null;
+      const r1 = el('postage-result'); if (r1) r1.innerHTML = '';
+      const r2 = el('gelato-postage-result'); if (r2) r2.innerHTML = '';
+      updateOrderSummary();
+    }
+  }
+  clearTimeout(autoPostageTimer);
+  autoPostageTimer = setTimeout(() => { calculatePostage({ auto: true }); }, 600);
+}
+
+async function calculatePostage(opts) {
+  const auto = !!(opts && opts.auto);
+  if (auto && (!checkoutIsOpen() || cart.length === 0)) return;
   const { code: countryCode, name: countryName } = getSelectedCountry();
   const isIntl        = countryCode !== 'AU';
   const resultEl       = el('postage-result');
   const gelatoResultEl = el('gelato-postage-result');
-  const btn            = el('postage-calc-btn');
 
   const auspostItems    = cart.filter(a => a.source !== 'gelato');
   const gelatoCartItems = cart.filter(a => a.source === 'gelato');
@@ -1883,6 +2033,7 @@ async function calculatePostage() {
   let postcode = '';
   if (auspostItems.length > 0 && !isIntl) {
     postcode = el('postcode').value.trim();
+    if (auto && !/^[0-9]{4}$/.test(postcode)) return;   // still typing — stay quiet
     if (!postcode || !/^[0-9]{4}$/.test(postcode)) {
       resultEl.innerHTML = '<p class="postage-error">Please enter a valid 4-digit postcode in your shipping address above.</p>';
       el('postcode').focus();
@@ -1925,7 +2076,21 @@ async function calculatePostage() {
     };
   }
 
-  btn.disabled = true; btn.textContent = 'Calculating…';
+  // Auto mode: print shipping needs the buyer's name and address first.
+  if (auto && gelatoCartItems.length > 0) {
+    const need = ['first-name', 'last-name', 'address', 'city', 'postcode'];
+    if (need.some(id => !fieldVal(id))) {
+      gelatoResultEl.innerHTML = '<p class="postage-loading">Complete your name and address above to see print shipping options.</p>';
+      return;
+    }
+  }
+  // Auto mode: don't re-quote identical inputs.
+  const quoteKey = currentPostageKey();
+  if (auto && quoteKey === lastPostageKey) return;
+  lastPostageKey = quoteKey;
+
+  const mySeq = ++postageRequestSeq;
+  trackEvent('shipping_calc');
   if (auspostItems.length > 0) {
     const parcelWord = items.length === 1 ? 'parcel' : (items.length + ' parcels');
     resultEl.innerHTML = '<p class="postage-loading">Fetching ' + (isIntl ? 'international ' : '') + 'rates from Australia Post for ' + parcelWord + '…</p>';
@@ -1950,6 +2115,7 @@ async function calculatePostage() {
       method: 'POST',
       body:   JSON.stringify(requestBody),
     });
+    if (mySeq !== postageRequestSeq) return;   // a newer request superseded this one
 
     if (auspostItems.length > 0) {
       renderAusPostServices(data, resultEl, isIntl, countryName, postcode, items.length);
@@ -1958,6 +2124,8 @@ async function calculatePostage() {
       renderGelatoServices(data, gelatoResultEl);
     }
   } catch (e) {
+    if (mySeq !== postageRequestSeq) return;
+    lastPostageKey = null;   // let the buyer retry the same inputs
     if (auspostItems.length > 0) {
       resultEl.innerHTML = '<p class="postage-error">Could not calculate postage. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a shipping quote.</p>';
     }
@@ -1965,7 +2133,7 @@ async function calculatePostage() {
       gelatoResultEl.innerHTML = '<p class="postage-error">Could not calculate print shipping. Please <a href="#contact" class="postage-contact-link">contact Michael</a> for a shipping quote.</p>';
     }
   } finally {
-    btn.disabled = false; btn.textContent = 'Calculate';
+    /* nothing to reset — shipping now calculates automatically */
   }
 }
 
@@ -2105,6 +2273,92 @@ async function initSquare() {
     console.error('Square init error:', e);
     el('card-container').textContent = '⚠️ Payment form could not load. Check your Square credentials in square-config.js.';
   }
+  // Wallets are optional extras — they never block or break the card form.
+  try { await initWallets(); } catch (e) { console.warn('Wallet init skipped:', e); }
+}
+
+/* ─── DIGITAL WALLETS (Apple Pay / Google Pay) ────────────────────────────── */
+let walletPaymentRequest = null;
+let walletApplePay       = null;
+let walletGooglePay      = null;
+const WALLET_LABEL = 'Airlie Beach Art';
+
+/** Artwork total plus whichever postage quotes are selected (same maths as buildOrderSummary). */
+function getGrandTotal() {
+  const artworkTotal = cart.reduce((s, i) => s + i.price, 0);
+  const sources      = getCartSources();
+  const postageTotal = (sources.has('auspost') && selectedPostage ? selectedPostage.price : 0) +
+                       (sources.has('gelato')  && selectedGelatoPostage ? selectedGelatoPostage.price : 0);
+  return artworkTotal + postageTotal;
+}
+
+/** Keeps the amount shown on the Apple Pay / Google Pay sheet in step with the order total. */
+function syncWalletTotal() {
+  if (!walletPaymentRequest) return;
+  try {
+    walletPaymentRequest.update({ total: { amount: getGrandTotal().toFixed(2), label: WALLET_LABEL } });
+  } catch (e) { console.warn('Wallet total update failed:', e); }
+}
+
+/**
+ * Sets up Apple Pay and Google Pay through Square's Web Payments SDK. Each
+ * is only revealed if the SDK reports it's usable on this device/browser
+ * (Apple Pay: Safari with a card in Wallet; Google Pay: supported browsers),
+ * so everyone else just sees the card form.
+ */
+async function initWallets() {
+  if (!squarePayments) return;
+  walletPaymentRequest = squarePayments.paymentRequest({
+    countryCode:  'AU',
+    currencyCode: 'AUD',
+    total: { amount: Math.max(getGrandTotal(), 0.01).toFixed(2), label: WALLET_LABEL },
+  });
+
+  let anyWallet = false;
+
+  try {
+    walletApplePay = await squarePayments.applePay(walletPaymentRequest);
+    const btn = el('apple-pay-button');
+    btn.classList.remove('hidden');
+    btn.addEventListener('click', e => handleWalletPayment(e, walletApplePay));
+    anyWallet = true;
+  } catch (e) { walletApplePay = null; }
+
+  try {
+    walletGooglePay = await squarePayments.googlePay(walletPaymentRequest);
+    await walletGooglePay.attach('#google-pay-button', { buttonColor: 'black', buttonType: 'pay', buttonSizeMode: 'fill' });
+    const box = el('google-pay-button');
+    box.classList.remove('hidden');
+    box.addEventListener('click', e => handleWalletPayment(e, walletGooglePay));
+    anyWallet = true;
+  } catch (e) { walletGooglePay = null; }
+
+  if (anyWallet) el('wallet-pay-section').classList.remove('hidden');
+  syncWalletTotal();
+}
+
+/**
+ * Click handler for the Apple Pay / Google Pay buttons. Runs the same form and
+ * postage checks as "Complete Purchase" first, then opens the wallet sheet.
+ * Everything before tokenize() is synchronous on purpose — Apple Pay requires
+ * tokenize() to be called straight from the click.
+ */
+async function handleWalletPayment(event, method) {
+  event.preventDefault();
+  el('payment-error').style.display = 'none';
+  const fields = preflightCheckout(); if (!fields) return;
+  syncWalletTotal();
+  try {
+    const result = await method.tokenize();
+    if (result.status === 'OK') {
+      const btn = el('pay-btn'); btn.disabled = true; btn.textContent = 'Processing…';
+      await processPayment(result.token, fields);
+    } else if (result.status !== 'Cancel') {
+      showPaymentError('That payment could not be completed. Please try again, or pay by card.');
+    }
+  } catch (e) {
+    showPaymentError('That payment could not be completed. Please try again, or pay by card.');
+  }
 }
 
 function showPaymentError(msg) {
@@ -2172,6 +2426,23 @@ function validateForm() {
   };
 }
 
+/**
+ * Shared pre-payment checks for card and wallet payments: the form is valid
+ * and every fulfilment path in the cart has a selected shipping option.
+ * Returns the validated fields, or null after showing the problem.
+ */
+function preflightCheckout() {
+  const fields = validateForm(); if (!fields) return null;
+  const sources = getCartSources();
+  if (sources.has('auspost') && !selectedPostage) {
+    showPaymentError('Please enter your postcode and select a shipping option before completing your purchase.'); return null;
+  }
+  if (sources.has('gelato') && !selectedGelatoPostage) {
+    showPaymentError('Please complete your address and select a print shipping option before completing your purchase.'); return null;
+  }
+  return fields;
+}
+
 async function handlePayment() {
   el('payment-error').style.display = 'none';
   const fields = validateForm(); if (!fields) return;
@@ -2182,10 +2453,10 @@ async function handlePayment() {
   // immediately rather than only after Square tokenizes their card.
   const sources = getCartSources();
   if (sources.has('auspost') && !selectedPostage) {
-    showPaymentError('Please calculate postage and select a shipping option before completing your purchase.'); return;
+    showPaymentError('Please enter your postcode and select a shipping option before completing your purchase.'); return;
   }
   if (sources.has('gelato') && !selectedGelatoPostage) {
-    showPaymentError('Please calculate print shipping and select a shipping option before completing your purchase.'); return;
+    showPaymentError('Please complete your address and select a print shipping option before completing your purchase.'); return;
   }
   if (!squareCard) { showPaymentError('Payment form is not ready. Please try again.'); return; }
   const btn = el('pay-btn'); btn.disabled = true; btn.textContent = 'Processing…';
@@ -2196,7 +2467,7 @@ async function handlePayment() {
     } else {
       const code = result.errors && result.errors[0] ? result.errors[0].code : '';
       showPaymentError(safeCardError(code));
-      if (squareCard.clear) await squareCard.clear();
+      if (squareCard && squareCard.clear) await squareCard.clear();
       btn.disabled = false; btn.textContent = 'Complete Purchase';
     }
   } catch (e) {
@@ -2241,7 +2512,7 @@ async function processPayment(sourceId, fields) {
         postageQuoteIds,
       }),
     });
-    if (squareCard.clear) await squareCard.clear();
+    if (squareCard && squareCard.clear) await squareCard.clear();
     await loadArtworks();
     cart = []; selectedPostage = null; selectedGelatoPostage = null;
     updateCartUI(); showSuccess(data.orderId);
@@ -2250,7 +2521,7 @@ async function processPayment(sourceId, fields) {
       ? e.message
       : 'Payment could not be processed. Please check your card details and try again.';
     showPaymentError(msg);
-    if (squareCard.clear) await squareCard.clear();
+    if (squareCard && squareCard.clear) await squareCard.clear();
     const btn = el('pay-btn'); btn.disabled = false; btn.textContent = 'Complete Purchase';
   }
 }
@@ -2285,6 +2556,15 @@ function showSuccess(orderId) {
 function resetShop() {
   squareCard = null; squarePayments = null;
   el('card-container').innerHTML = '';
+  // Drop the wallet objects and their button listeners; initWallets() rebuilds
+  // them the next time checkout opens.
+  walletPaymentRequest = null; walletApplePay = null; walletGooglePay = null;
+  const appleBtn = el('apple-pay-button');
+  if (appleBtn) { const fresh = appleBtn.cloneNode(true); fresh.classList.add('hidden'); appleBtn.replaceWith(fresh); }
+  const googleBtn = el('google-pay-button');
+  if (googleBtn) { const fresh = googleBtn.cloneNode(false); fresh.classList.add('hidden'); googleBtn.replaceWith(fresh); }
+  const walletSection = el('wallet-pay-section');
+  if (walletSection) walletSection.classList.add('hidden');
   renderGallery(); closeCheckout();
 }
 
@@ -2306,7 +2586,7 @@ document.addEventListener('DOMContentLoaded', function() {
   wire('checkout-btn',           'click', openCheckout);
   wire('checkout-close-btn',     'click', closeCheckout);
   wire('pay-btn',                'click', handlePayment);
-  wire('postage-calc-btn',       'click', calculatePostage);
+  ['postcode', 'first-name', 'last-name', 'address', 'city', 'state'].forEach(function(id) { wire(id, 'input', scheduleAutoPostage); });
   wire('postcode',               'keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); calculatePostage(); } });
   wire('success-continue-btn',   'click', resetShop);
   wire('login-btn',              'click', attemptLogin);
@@ -2323,6 +2603,8 @@ document.addEventListener('DOMContentLoaded', function() {
   wire('admin-add-btn',          'click', openAddPanel);
   wire('admin-logout-btn',       'click', adminLogout);
   wire('orders-close-btn',       'click', closeOrders);
+  wire('admin-analytics-btn', 'click', openAnalyticsPanel);
+  wire('analytics-close-btn', 'click', closeAnalyticsPanel);
   wire('admin-image-settings-btn', 'click', openImageSettingsPanel);
   wire('image-settings-close-btn', 'click', closeImageSettingsPanel);
   wire('image-settings-save-btn',  'click', saveImageSettingsFromPanel);
@@ -2363,11 +2645,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Drag-and-drop reordering — dragover is wired once on each grid
   // container here; dragstart/dragend are wired per-card in buildCard().
-  wire('gallery-seascapes',  'dragover', function(e) { handleGalleryDragOver(e, el('gallery-seascapes')); });
-  wire('gallery-figurative', 'dragover', function(e) { handleGalleryDragOver(e, el('gallery-figurative')); });
+  wire('gallery-grid', 'dragover', function(e) { handleGalleryDragOver(e, el('gallery-grid')); });
 
   // Country dropdown — toggles postcode field and resets postage quote
   wire('country', 'change', updatePostageSectionForCountry);
+
+  // Pre-select the buyer's country from their browser's language settings
+  // (e.g. en-US -> United States). Falls back to Australia, the default, when
+  // the browser gives no region or the region isn't in the list.
+  try { preselectCountryFromBrowser(); } catch (e) { console.warn('country preselect failed:', e); }
 
   document.addEventListener('keydown', function(e) {
     try {
@@ -2383,7 +2669,7 @@ document.addEventListener('DOMContentLoaded', function() {
       loadArtworks().then(function() {
         try { renderGallery(); } catch(e) {
           console.error('renderGallery failed:', e);
-          ['gallery-seascapes', 'gallery-figurative'].forEach(function(id) {
+          ['gallery-grid'].forEach(function(id) {
             const grid = el(id);
             if (grid) grid.innerHTML = '<p class="gallery-empty">Gallery could not be loaded. Please refresh the page.</p>';
           });

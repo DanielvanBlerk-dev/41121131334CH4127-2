@@ -168,6 +168,12 @@ nav {
   line-height: 1.8; font-size: 13px;
   margin-bottom: 1.25rem;
 }
+.announcement-note {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--gold-light);
+  margin: -0.5rem 0 1.25rem;
+}
 .announcement-cta {
   display: inline-block;
   font-family: 'DM Mono', monospace;
@@ -222,10 +228,18 @@ nav {
 }
 .about-para:last-child { margin-bottom: 0; }
 .about-eyebrow { text-align: center; }
+.about-credits {
+  list-style: none; margin: 1.75rem 0 0; padding: 1.25rem 0 0;
+  border-top: 1px solid var(--border);
+}
+.about-credits li {
+  font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.06em;
+  line-height: 1.8; color: var(--gold); margin-bottom: 0.6rem;
+}
+.about-credits li:last-child { margin-bottom: 0; }
 
 /* ─── GALLERY SECTIONS ────────────────────────────────────────────────────── */
 .gallery-section { border-top: 1px solid var(--border); }
-.figurative-section { background: var(--parchment); }
 .gallery-section-header { margin-bottom: 3rem; }
 .gallery-section-title {
   font-family: 'Cormorant Garamond', serif;
@@ -289,6 +303,8 @@ nav {
 .artwork-label { display: flex; justify-content: space-between; align-items: baseline; }
 .artwork-title { font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 400; font-style: italic; }
 .artwork-price { font-size: 12px; color: var(--gold); letter-spacing: 0.08em; }
+/* Approximate USD figure shown beside an AUD price (see usdApprox in script.js) */
+.price-usd { font-size: 0.82em; font-weight: 400; opacity: 0.7; margin-left: 0.45em; letter-spacing: 0.02em; white-space: nowrap; }
 .artwork-medium { font-size: 11px; color: var(--muted); margin-top: 2px; letter-spacing: 0.06em; }
 .artwork-stock { font-size: 10px; color: var(--gold); margin-top: 4px; letter-spacing: 0.08em; text-transform: uppercase; }
 .add-btn {
@@ -472,6 +488,20 @@ nav {
   outline: none; transition: border-color 0.2s;
 }
 .form-group input:focus, .form-group select:focus { border-color: var(--gold); }
+/* Digital wallets (Apple Pay / Google Pay) */
+.wallet-pay-section { margin-bottom: 14px; }
+.wallet-pay-section.hidden, .apple-pay-button.hidden, .google-pay-button.hidden { display: none; }
+.apple-pay-button {
+  display: block; width: 100%; height: 48px; margin-bottom: 10px; cursor: pointer;
+  -webkit-appearance: -apple-pay-button; -apple-pay-button-type: pay; -apple-pay-button-style: black;
+  border: none; border-radius: 4px; padding: 0;
+}
+.google-pay-button { width: 100%; min-height: 48px; margin-bottom: 10px; }
+.wallet-divider {
+  display: flex; align-items: center; gap: 12px; margin: 14px 0 4px;
+  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+}
+.wallet-divider::before, .wallet-divider::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
 #card-container { border: 1px solid var(--border); padding: 12px; background: white; margin-bottom: 12px; min-height: 48px; }
 .sq-card-message { font-size: 11px; color: var(--muted); margin-top: 6px; }
 .payment-error { color: #c0392b; font-size: 11px; margin-top: 8px; display: none; }
@@ -1598,3 +1628,25 @@ footer {
   .collections-input-row { flex-direction: column; }
   .collections-add-btn { padding: 10px; }
 }
+
+/* ─── ANALYTICS MODAL (admin) ─────────────────────────────────────────────── */
+.analytics-overlay {
+  position: fixed; inset: 0; z-index: 500; background: rgba(26,22,18,0.7);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.25s; padding: 1.5rem;
+}
+.analytics-overlay.open { opacity: 1; pointer-events: all; }
+.analytics-box {
+  background: var(--warm-white); width: 100%; max-width: 440px;
+  border: 1px solid var(--border); padding: 2.5rem; max-height: 90vh; overflow-y: auto;
+}
+.analytics-title { font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 300; margin-bottom: 0.5rem; }
+.analytics-sub   { font-size: 11px; color: var(--muted); line-height: 1.7; margin-bottom: 1.5rem; }
+.analytics-row {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline;
+  padding: 0.75rem 0; border-bottom: 1px solid var(--border);
+}
+.analytics-label { font-size: 13px; }
+.analytics-count { font-family: 'Cormorant Garamond', serif; font-size: 24px; color: var(--gold); }
+.analytics-pct   { flex-basis: 100%; font-size: 10px; letter-spacing: 0.06em; color: var(--muted); }
+.analytics-note  { font-size: 11px; color: var(--muted); line-height: 1.7; margin: 1.25rem 0; }

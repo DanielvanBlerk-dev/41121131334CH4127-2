@@ -12,7 +12,7 @@ frontend framework or build step.
 | **Backend** | Vercel serverless functions in `api/` (Node, ES modules). |
 | **Data store** | Upstash Redis — artworks, orders, and admin-configurable settings. |
 | **Photo storage** | Vercel Blob — every uploaded photo is stored as two files: a full-size version (lightbox + print orders) and a small thumbnail (gallery grid), generated at upload time by an admin-configurable compression pipeline (`sharp`). |
-| **Payments** | Square Web Payments SDK (client-side tokenization) + Square Payments API (server-side charge). |
+| **Payments** | Square Web Payments SDK (client-side tokenization: card, Apple Pay, Google Pay) + Square Payments API (server-side charge). |
 | **Print fulfilment** | Gelato print-on-demand API — product catalogue import, shipping quotes, and order submission for "Gelato print" listings. |
 | **Shipping quotes** | Australia Post API, for Original / Oversized / Original Print listings (Gelato quotes its own shipping for its own listings). |
 | **Email** | Resend — purchase notifications, contact form submissions, newsletter sign-ups. |
@@ -35,6 +35,7 @@ airlie-beach-art/
 │   │                                submission, purchase-confirmation email
 │   ├── postage.js                ← AusPost + Gelato shipping quotes
 │   ├── contact.js                ← Contact form + newsletter sign-up
+│   ├── track.js                  ← Funnel event counters (public POST) + admin totals (GET)
 │   ├── _verifyAdmin.js           ← Admin token verification (shared by admin-only routes)
 │   ├── _csrf.js                  ← CSRF token check (shared)
 │   ├── _rateLimit.js             ← IP-based rate limiting (shared)
