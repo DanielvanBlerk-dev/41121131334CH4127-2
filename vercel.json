@@ -124,23 +124,17 @@
           "value": "public, max-age=604800"
         }
       ]
-    },
+    }
+  ],
+  "functions": {
+    "api/apple-pay-verify.js": {
+      "includeFiles": "data/apple-domain-association.txt"
+    }
+  },
+  "rewrites": [
     {
       "source": "/.well-known/apple-developer-merchantid-domain-association",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/octet-stream"
-        },
-        {
-          "key": "Content-Disposition",
-          "value": "attachment; filename=\"apple-developer-merchantid-domain-association\""
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=300, no-transform"
-        }
-      ]
+      "destination": "/api/apple-pay-verify"
     }
   ]
 }
