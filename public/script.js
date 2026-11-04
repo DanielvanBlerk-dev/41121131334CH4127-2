@@ -500,6 +500,10 @@ function renderCardContent(card, group) {
       actionEl.className   = 'contact-artist-btn';
       actionEl.href        = '#contact';
       actionEl.textContent = 'Contact Artist — freight quote required';
+      actionEl.addEventListener('click', () => {
+        setEnquiryType('shipping');
+        el('contact-painting').value = art.title || '';
+      });
     }
   } else {
     // Standard flow — used for both original paintings and Gelato prints.
@@ -2212,27 +2216,72 @@ function initContactCountry() {
   target.value = source.value;
 }
 
+// Which optional groups each enquiry type shows. Twin of the per-type rules in
+// api/contact.js. Name, email, country and message are on every type.
+const ENQUIRY_FIELD_GROUPS = {
+  commission: ['contact-commission-fields'],
+  shipping:   ['contact-painting-group', 'contact-postcode-group'],
+  artwork:    [],
+  other:      [],
+};
+const ALL_ENQUIRY_GROUPS = ['contact-commission-fields', 'contact-painting-group', 'contact-postcode-group'];
+
+function updateEnquiryFields() {
+  const type = el('contact-enquiry-type').value;
+  el('contact-fields').hidden = !type;
+  const groups = ENQUIRY_FIELD_GROUPS[type] || [];
+  ALL_ENQUIRY_GROUPS.forEach(function(id) { el(id).hidden = !groups.includes(id); });
+  // The structured fields carry these two types, so the message is extra detail.
+  const messageOptional = type === 'commission' || type === 'shipping';
+  el('contact-message-label').textContent = messageOptional ? 'Message (optional)' : 'Message';
+  el('contact-country-label').textContent = type === 'shipping' ? 'Destination country' : 'Country';
+  el('contact-form-error').textContent = '';
+}
+
+// Lets a link or button open the form on the right type.
+function setEnquiryType(type) {
+  if (!Object.hasOwn(ENQUIRY_FIELD_GROUPS, type)) return;
+  el('contact-enquiry-type').value = type;
+  updateEnquiryFields();
+}
+
 async function submitContactForm() {
   const errEl  = el('contact-form-error');
   const succEl = el('contact-form-success');
   const btn    = el('contact-form-btn');
   try {
-    const name    = el('contact-name').value.trim();
-    const email   = el('contact-email').value.trim();
-    const subject  = el('contact-subject').value.trim();
-    const size     = el('contact-size').value.trim();
-    const budget   = el('contact-budget').value;
-    const timeline = el('contact-timeline').value;
+    const enquiryType = el('contact-enquiry-type').value;
+    const name     = el('contact-name').value.trim();
+    const email    = el('contact-email').value.trim();
     const country  = el('contact-country').value;
+    const message  = el('contact-message').value.trim();
+    const body = { enquiryType, name, email, country, message };
     errEl.textContent = ''; succEl.textContent = '';
     if (!name)    { errEl.textContent = 'Please enter your name.'; return; }
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { errEl.textContent = 'Please enter a valid email address.'; return; }
-    if (!subject) { errEl.textContent = 'Please enter a subject or reference painting.'; return; }
+    if (!email || !validEmail(email)) { errEl.textContent = 'Please enter a valid email address.'; return; }
+    if (!country) { errEl.textContent = 'Please choose your country.'; return; }
+    if (enquiryType === 'commission') {
+      body.subject  = el('contact-subject').value.trim();
+      body.size     = el('contact-size').value.trim();
+      body.budget   = el('contact-budget').value;
+      body.timeline = el('contact-timeline').value;
+      if (!body.subject) { errEl.textContent = 'Please enter a subject or reference painting.'; return; }
+    } else if (enquiryType === 'shipping') {
+      body.painting = el('contact-painting').value.trim();
+      body.postcode = el('contact-postcode').value.trim();
+      if (!body.painting) { errEl.textContent = 'Please tell us which painting.'; return; }
+      // Not every country uses postcodes, so it's only required for Australia.
+      if ((country === 'AU' || body.postcode) && !validPostcode(body.postcode, country)) {
+        errEl.textContent = 'Please enter a valid postcode.'; return;
+      }
+    } else if (!message) {
+      errEl.textContent = 'Please enter a message.'; return;
+    }
     btn.disabled = true; btn.textContent = 'Sending…';
-    const data = await apiFetch('/api/contact', { method: 'POST', body: JSON.stringify({ name, email, subject, size, budget, timeline, country }) });
+    const data = await apiFetch('/api/contact', { method: 'POST', body: JSON.stringify(body) });
     if (data.fallback) { errEl.innerHTML = data.error + ' — <a href="mailto:michael.p.vanblerk@gmail.com" style="color:#f5a0a0;">michael.p.vanblerk@gmail.com</a>'; return; }
     succEl.textContent = 'Message sent — Michael will be in touch soon.';
-    ['contact-name', 'contact-email', 'contact-subject', 'contact-size', 'contact-budget', 'contact-timeline'].forEach(function(id) { el(id).value = ''; });
+    ['contact-name', 'contact-email', 'contact-subject', 'contact-size', 'contact-budget', 'contact-timeline', 'contact-painting', 'contact-postcode', 'contact-message'].forEach(function(id) { el(id).value = ''; });
   } catch (e) {
     errEl.textContent = e.message || 'Message could not be sent. Please email Michael directly.';
   } finally { btn.disabled = false; btn.textContent = 'Send message'; }
@@ -2733,6 +2782,9 @@ document.addEventListener('DOMContentLoaded', function() {
   // the browser gives no region or the region isn't in the list.
   try { preselectCountryFromBrowser(); } catch (e) { console.warn('country preselect failed:', e); }
   try { initContactCountry(); } catch (e) { console.warn('contact country list failed:', e); }
+  wire('contact-enquiry-type', 'change', updateEnquiryFields);
+  // e.g. the Commissions page links to /?enquiry=commission#contact
+  try { setEnquiryType(new URLSearchParams(location.search).get('enquiry')); } catch (e) { console.warn('enquiry preselect failed:', e); }
 
   document.addEventListener('keydown', function(e) {
     try {

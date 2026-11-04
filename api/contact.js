@@ -12,9 +12,12 @@ import { capFields } from './_sanitize.js';
  * Handles two submission types, distinguished by the `type` field:
  *
  *   type: 'contact' (default, or omitted for backwards compatibility)
- *     Body: { name, email, subject, size?, budget?, timeline?, country? }
- *     Sends the contact form email. `message` is accepted in place of
- *     `subject` for any browser still running the previous script.js.
+ *     Body: { enquiryType, name, email, country, message, ...per-type fields }
+ *       commission: subject, size?, budget?, timeline?, message?
+ *       shipping:   painting, postcode (required for Australia), message?
+ *       artwork, other: message
+ *     Sends the contact form email. A body with no enquiryType comes from a
+ *     browser still running the previous script.js, whose form matched Commission.
  *
  *   type: 'newsletter'
  *     Body: { type: 'newsletter', name, email }
@@ -40,7 +43,13 @@ function hasHtml(str) {
   return /[<>]/.test(str);
 }
 
-// Twins of the option values in index.html's #contact-budget / #contact-timeline.
+// Twins of the option values in index.html's enquiry form.
+const ENQUIRY_LABELS = {
+  'commission': 'Commission',
+  'artwork':    'A painting or print',
+  'shipping':   'Shipping or freight quote',
+  'other':      'Something else',
+};
 const BUDGET_LABELS = {
   'under-500':  'Under AUD $500',
   '500-1000':   'AUD $500 to $1,000',
@@ -69,7 +78,7 @@ export default async function handler(req, res) {
   const ip = getIp(req);
 
   // ── Body size limit ───────────────────────────────────────────────────
-  const bodyCheck = checkBodySize(req, '5kb');
+  const bodyCheck = checkBodySize(req, '8kb');
   if (!bodyCheck.ok) return res.status(413).json({ error: bodyCheck.error });
 
   // ── CSRF check ────────────────────────────────────────────────────────
@@ -79,8 +88,11 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  const { type = 'contact', name, email, size = '', budget = '', timeline = '', country = '' } = req.body || {};
-  const message = req.body?.subject ?? req.body?.message;
+  const {
+    type = 'contact', name, email, enquiryType,
+    subject = '', message = '', size = '', budget = '', timeline = '',
+    painting = '', postcode = '', country = '',
+  } = req.body || {};
   const isNewsletter = type === 'newsletter';
 
   // ── Simple in-memory rate limit (1 submission per IP per minute, per type) ─
@@ -104,25 +116,46 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Name contains invalid characters.' });
   }
 
-  // Message is only required for the contact form, not the newsletter signup
+  // The newsletter signup only needs the name and email checked above.
+  const enquiry = enquiryType ?? (subject ? 'commission' : 'other');
+  const isCommission = enquiry === 'commission';
+  const isShipping   = enquiry === 'shipping';
   if (!isNewsletter) {
-    if (!message || typeof message !== 'string' || !message.trim()) {
-      return res.status(400).json({ error: 'Please enter a subject or reference painting.' });
+    if (!Object.hasOwn(ENQUIRY_LABELS, enquiry)) {
+      return res.status(400).json({ error: 'Please choose what your enquiry is about.' });
     }
-    if (hasHtml(message)) {
-      return res.status(400).json({ error: 'Subject contains invalid characters.' });
+    const textFields = [['Subject', subject], ['Message', message], ['Size', size], ['Painting', painting], ['Postcode', postcode]];
+    for (const [label, value] of textFields) {
+      if (typeof value !== 'string' || hasHtml(value)) {
+        return res.status(400).json({ error: `${label} contains invalid characters.` });
+      }
     }
-    if (typeof size !== 'string' || hasHtml(size)) {
-      return res.status(400).json({ error: 'Size contains invalid characters.' });
+    if (typeof country !== 'string' || !/^[A-Z]{2}$/.test(country)) {
+      return res.status(400).json({ error: 'Please choose your country.' });
     }
-    if (budget && !Object.hasOwn(BUDGET_LABELS, budget)) {
-      return res.status(400).json({ error: 'Please choose a budget range from the list.' });
-    }
-    if (timeline && !Object.hasOwn(TIMELINE_LABELS, timeline)) {
-      return res.status(400).json({ error: 'Please choose a timeline from the list.' });
-    }
-    if (country && (typeof country !== 'string' || !/^[A-Z]{2}$/.test(country))) {
-      return res.status(400).json({ error: 'Please choose a country from the list.' });
+    if (isCommission) {
+      if (!subject.trim()) {
+        return res.status(400).json({ error: 'Please enter a subject or reference painting.' });
+      }
+      if (budget && !Object.hasOwn(BUDGET_LABELS, budget)) {
+        return res.status(400).json({ error: 'Please choose a budget range from the list.' });
+      }
+      if (timeline && !Object.hasOwn(TIMELINE_LABELS, timeline)) {
+        return res.status(400).json({ error: 'Please choose a timeline from the list.' });
+      }
+    } else if (isShipping) {
+      if (!painting.trim()) {
+        return res.status(400).json({ error: 'Please tell us which painting.' });
+      }
+      // Same rule as validPostcode() in script.js. Not every country uses
+      // postcodes, so it's only required for Australia.
+      const pc = postcode.trim();
+      const pcValid = country === 'AU' ? /^[0-9]{4,10}$/.test(pc) : (!pc || /^[A-Za-z0-9\s\-]{2,12}$/.test(pc));
+      if (!pcValid) {
+        return res.status(400).json({ error: 'Please enter a valid postcode.' });
+      }
+    } else if (!message.trim()) {
+      return res.status(400).json({ error: 'Please enter a message.' });
     }
   }
 
@@ -132,7 +165,13 @@ export default async function handler(req, res) {
     ['Email', email.trim(), 254],
   ];
   if (!isNewsletter) {
-    fieldsToCheck.push(['Subject', message.trim(), 2000], ['Size', size.trim(), 100]);
+    fieldsToCheck.push(
+      ['Subject', subject.trim(), 2000],
+      ['Message', message.trim(), 2000],
+      ['Size', size.trim(), 100],
+      ['Painting', painting.trim(), 200],
+      ['Postcode', postcode.trim(), 12],
+    );
   }
   const caps = capFields(fieldsToCheck);
   if (!caps.ok) return res.status(400).json({ error: caps.error });
@@ -144,11 +183,15 @@ export default async function handler(req, res) {
       : await sendContactEmail({
           name: name.trim(),
           email: email.trim(),
+          enquiry: ENQUIRY_LABELS[enquiry],
           message: message.trim(),
-          size: size.trim(),
-          budget: BUDGET_LABELS[budget] || '',
-          timeline: TIMELINE_LABELS[timeline] || '',
-          country: country ? countryName(country) : '',
+          subject: isCommission ? subject.trim() : '',
+          size: isCommission ? size.trim() : '',
+          budget: isCommission ? (BUDGET_LABELS[budget] || '') : '',
+          timeline: isCommission ? (TIMELINE_LABELS[timeline] || '') : '',
+          painting: isShipping ? painting.trim() : '',
+          postcode: isShipping ? postcode.trim() : '',
+          country: countryName(country),
         });
 
     // Record the send time for rate limiting regardless of email outcome

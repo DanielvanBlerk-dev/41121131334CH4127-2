@@ -19,7 +19,7 @@
  *   /api/toggle-sold          →  1kb
  *   /api/create-payment       →  10kb
  *   /api/postage              →  1kb
- *   /api/contact              →  5kb
+ *   /api/contact              →  8kb
  */
 
 const UNITS = { b: 1, kb: 1024, mb: 1024 * 1024 };

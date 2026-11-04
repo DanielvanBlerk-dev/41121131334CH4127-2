@@ -1663,6 +1663,31 @@ footer { flex-wrap: wrap; gap: 1rem 2rem; }
 .contact-form-note { font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 12px; }
 .newsletter-privacy { font-size: 10px; color: var(--muted); text-align: center; margin-top: 4px; }
 
+/* ─── CONTACT FORM FIELDS ─────────────────────────────────────────────────────
+   Every field shares one dark look. These override the white .form-group
+   defaults used by the checkout. The autofill rule stops Chrome painting
+   autofilled fields light blue: its background can't be set directly, so it's
+   covered with an inset shadow in the field colour. */
+.contact-form-wrap { color-scheme: dark; --contact-field-bg: #282420; max-width: 640px; }
+.contact-form-wrap .contact-form-label { color: rgba(255,255,255,0.65); }
+.contact-form-wrap .contact-form-input {
+  background: var(--contact-field-bg);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: var(--warm-white);
+  display: block;
+}
+.contact-form-wrap .contact-form-input:focus { border-color: var(--gold); }
+.contact-form-wrap select option { background: var(--contact-field-bg); color: var(--warm-white); }
+.contact-form-wrap .contact-form-input:-webkit-autofill,
+.contact-form-wrap .contact-form-input:-webkit-autofill:hover,
+.contact-form-wrap .contact-form-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--warm-white);
+  caret-color: var(--warm-white);
+  -webkit-box-shadow: 0 0 0 1000px var(--contact-field-bg) inset;
+  box-shadow: 0 0 0 1000px var(--contact-field-bg) inset;
+  transition: background-color 99999s;
+}
+
 /* ─── POLICY PAGES (commissions, shipping, returns, privacy) ──────────────────
    Long-form reading pages: serif body text at a comfortable size and measure,
    with the mono face kept for small labels. --policy-text and --policy-label

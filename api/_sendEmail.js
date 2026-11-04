@@ -190,13 +190,17 @@ export async function sendPurchaseNotification({
  * @param {object} opts
  * @param {string} opts.name    - sender's name
  * @param {string} opts.email   - sender's email
- * @param {string} opts.message - subject or reference painting
+ * @param {string} opts.enquiry  - enquiry type label
+ * @param {string} opts.country
+ * @param {string} [opts.message]
+ * @param {string} [opts.subject]  - subject or reference painting (commissions)
  * @param {string} [opts.size]
  * @param {string} [opts.budget]
  * @param {string} [opts.timeline]
- * @param {string} [opts.country]
+ * @param {string} [opts.painting] - which painting (shipping quotes)
+ * @param {string} [opts.postcode]
  */
-export async function sendContactEmail({ name, email, message, size = '', budget = '', timeline = '', country = '' }) {
+export async function sendContactEmail({ name, email, enquiry, country, message = '', subject = '', size = '', budget = '', timeline = '', painting = '', postcode = '' }) {
   const adminEmail = process.env.ADMIN_EMAIL || 'michael.p.vanblerk@gmail.com';
 
   const html = `
@@ -229,7 +233,7 @@ export async function sendContactEmail({ name, email, message, size = '', budget
           <td style="padding:6px 12px;color:#7a7368;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;">Email</td>
           <td style="padding:6px 12px;"><a href="mailto:${email}" style="color:#1a1612;">${email}</a></td>
         </tr>
-        ${[['Size', size], ['Budget', budget], ['Timeline', timeline], ['Country', country]]
+        ${[['Enquiry', enquiry], ['Size', size], ['Budget', budget], ['Timeline', timeline], ['Painting', painting], ['Country', country], ['Postcode', postcode]]
           .filter(([, value]) => value)
           .map(([label, value]) => `<tr>
           <td style="padding:6px 12px;color:#7a7368;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;">${label}</td>
@@ -237,10 +241,12 @@ export async function sendContactEmail({ name, email, message, size = '', budget
         </tr>`).join('')}
       </table>
 
-      <p style="margin:0 0 16px;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#b8965a;border-bottom:1px solid #ede9e1;padding-bottom:8px;">
-        Subject or reference painting
+      ${[['Subject or reference painting', subject], ['Message', message]]
+        .filter(([, value]) => value)
+        .map(([label, value]) => `<p style="margin:0 0 16px;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#b8965a;border-bottom:1px solid #ede9e1;padding-bottom:8px;">
+        ${label}
       </p>
-      <div style="padding:16px;background:#f9f6f1;border:1px solid #ede9e1;line-height:1.8;white-space:pre-wrap;">${message}</div>
+      <div style="padding:16px;margin-bottom:24px;background:#f9f6f1;border:1px solid #ede9e1;line-height:1.8;white-space:pre-wrap;">${value}</div>`).join('')}
 
       <p style="margin:24px 0 0;font-size:11px;color:#7a7368;line-height:1.7;">
         Reply directly to
@@ -255,7 +261,7 @@ export async function sendContactEmail({ name, email, message, size = '', budget
 
   return sendEmail({
     to:      adminEmail,
-    subject: `New message from ${name} — Airlie Beach Art`,
+    subject: `New enquiry (${enquiry}) from ${name} — Airlie Beach Art`,
     html,
   });
 }

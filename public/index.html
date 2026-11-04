@@ -140,12 +140,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 
   <!-- ── STYLES ─────────────────────────────────────────────────────────── -->
-  <link rel="stylesheet" href="style.css?v=29">
+  <link rel="stylesheet" href="style.css?v=30">
 
   <!-- ── SQUARE + APP SCRIPTS ──────────────────────────────────────────── -->
   <script src="https://web.squarecdn.com/v1/square.js" defer></script>
   <script src="square-config.js?v=6" defer></script>
-  <script src="script.js?v=28" defer></script>
+  <script src="script.js?v=29" defer></script>
   <script src="nav.js?v=1" defer></script>
 
   <script>
@@ -280,52 +280,87 @@
       <div class="contact-form-wrap">
         <h3 class="contact-form-title">Send a message</h3>
         <div class="form-group">
-          <label for="contact-name" class="contact-form-label">Your name</label>
-          <input type="text" id="contact-name" placeholder="Jane Smith" class="contact-form-input">
-        </div>
-        <div class="form-group">
-          <label for="contact-email" class="contact-form-label">Your email</label>
-          <input type="email" id="contact-email" placeholder="jane@example.com" class="contact-form-input">
-        </div>
-        <div class="form-group">
-          <label for="contact-subject" class="contact-form-label">Subject or reference painting</label>
-          <textarea id="contact-subject" placeholder="A night seascape in the style of Flagship, a question about a listed work…" class="contact-form-input contact-form-textarea" rows="4"></textarea>
-        </div>
-        <div class="form-group">
-          <label for="contact-size" class="contact-form-label">Size (optional)</label>
-          <input type="text" id="contact-size" placeholder="e.g. 60 × 90 cm" class="contact-form-input">
-        </div>
-        <div class="form-group">
-          <label for="contact-budget" class="contact-form-label">Budget range (optional)</label>
-          <select id="contact-budget" class="contact-form-input">
-            <option value="">Select a range</option>
-            <option value="under-500">Under AUD $500</option>
-            <option value="500-1000">AUD $500 to $1,000</option>
-            <option value="1000-2500">AUD $1,000 to $2,500</option>
-            <option value="2500-5000">AUD $2,500 to $5,000</option>
-            <option value="over-5000">Over AUD $5,000</option>
-            <option value="unsure">Not sure yet</option>
+          <label for="contact-enquiry-type" class="contact-form-label">What's your enquiry about?</label>
+          <select id="contact-enquiry-type" class="contact-form-input">
+            <option value="">Please choose</option>
+            <option value="commission">Commission</option>
+            <option value="artwork">A painting or print</option>
+            <option value="shipping">Shipping or freight quote</option>
+            <option value="other">Something else</option>
           </select>
         </div>
-        <div class="form-group">
-          <label for="contact-timeline" class="contact-form-label">Timeline (optional)</label>
-          <select id="contact-timeline" class="contact-form-input">
-            <option value="">Select a timeline</option>
-            <option value="flexible">Flexible</option>
-            <option value="within-3-months">Within 3 months</option>
-            <option value="within-6-months">Within 6 months</option>
-            <option value="specific-date">A specific date (mention it above)</option>
-          </select>
+
+        <!-- Revealed once a type is chosen. updateEnquiryFields() in script.js
+             shows only the groups that type needs. -->
+        <div id="contact-fields" hidden>
+          <div class="form-group">
+            <label for="contact-name" class="contact-form-label">Your name</label>
+            <input type="text" id="contact-name" placeholder="Jane Smith" autocomplete="name" class="contact-form-input">
+          </div>
+          <div class="form-group">
+            <label for="contact-email" class="contact-form-label">Your email</label>
+            <input type="email" id="contact-email" placeholder="jane@example.com" autocomplete="email" class="contact-form-input">
+          </div>
+
+          <div id="contact-commission-fields" hidden>
+            <div class="form-group">
+              <label for="contact-subject" class="contact-form-label">Subject or reference painting</label>
+              <textarea id="contact-subject" placeholder="A night seascape in the style of Flagship…" class="contact-form-input contact-form-textarea" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="contact-size" class="contact-form-label">Size (optional)</label>
+              <input type="text" id="contact-size" placeholder="e.g. 60 × 90 cm" class="contact-form-input">
+            </div>
+            <div class="form-group">
+              <label for="contact-budget" class="contact-form-label">Budget range (optional)</label>
+              <select id="contact-budget" class="contact-form-input">
+                <option value="">Select a range</option>
+                <option value="under-500">Under AUD $500</option>
+                <option value="500-1000">AUD $500 to $1,000</option>
+                <option value="1000-2500">AUD $1,000 to $2,500</option>
+                <option value="2500-5000">AUD $2,500 to $5,000</option>
+                <option value="over-5000">Over AUD $5,000</option>
+                <option value="unsure">Not sure yet</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="contact-timeline" class="contact-form-label">Timeline (optional)</label>
+              <select id="contact-timeline" class="contact-form-input">
+                <option value="">Select a timeline</option>
+                <option value="flexible">Flexible</option>
+                <option value="within-3-months">Within 3 months</option>
+                <option value="within-6-months">Within 6 months</option>
+                <option value="specific-date">A specific date (mention it below)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group" id="contact-painting-group" hidden>
+            <label for="contact-painting" class="contact-form-label">Which painting?</label>
+            <input type="text" id="contact-painting" placeholder="The title of the painting or print" class="contact-form-input">
+          </div>
+
+          <div class="form-group">
+            <!-- Options are copied from the checkout's #country list by initContactCountry() in script.js. -->
+            <label for="contact-country" class="contact-form-label" id="contact-country-label">Country</label>
+            <select id="contact-country" class="contact-form-input" autocomplete="country"></select>
+          </div>
+
+          <div class="form-group" id="contact-postcode-group" hidden>
+            <label for="contact-postcode" class="contact-form-label">Postcode or postal code</label>
+            <input type="text" id="contact-postcode" placeholder="e.g. 4802" autocomplete="postal-code" class="contact-form-input">
+          </div>
+
+          <div class="form-group">
+            <label for="contact-message" class="contact-form-label" id="contact-message-label">Message</label>
+            <textarea id="contact-message" placeholder="How can Michael help?" class="contact-form-input contact-form-textarea" rows="5"></textarea>
+          </div>
+
+          <p class="contact-form-error" id="contact-form-error" role="alert"></p>
+          <button class="contact-form-btn" id="contact-form-btn">Send message</button>
+          <p class="contact-form-note">Your details are only used to reply to you. See the <a href="/privacy" class="inline-link">privacy policy</a>.</p>
         </div>
-        <div class="form-group">
-          <!-- Options are copied from the checkout's #country list by initContactCountry() in script.js. -->
-          <label for="contact-country" class="contact-form-label">Country</label>
-          <select id="contact-country" class="contact-form-input" autocomplete="country"></select>
-        </div>
-        <p class="contact-form-error" id="contact-form-error" role="alert"></p>
-        <button class="contact-form-btn" id="contact-form-btn">Send message</button>
         <p class="contact-form-success" id="contact-form-success" role="status"></p>
-        <p class="contact-form-note">Your details are only used to reply to you. See the <a href="/privacy" class="inline-link">privacy policy</a>.</p>
       </div>
     </div>
   </section>
