@@ -2695,6 +2695,29 @@ function resetShop() {
   renderGallery(); closeCheckout();
 }
 
+/* The gallery is built after the page loads and its photos load later still,
+   which pushes everything below it down. On arriving at a link like /#contact,
+   that would leave the visitor in the middle of the gallery, so the target is
+   re-aligned whenever the page height changes, until they start scrolling.
+   Reloads and back/forward are left alone so they keep their scroll position. */
+function keepHashTargetInView() {
+  const navEntry = performance.getEntriesByType('navigation')[0];
+  if (navEntry && navEntry.type !== 'navigate') return;
+  const target = location.hash.length > 1 && document.getElementById(location.hash.slice(1));
+  if (!target || !('ResizeObserver' in window)) return;
+
+  const userEvents = ['wheel', 'touchstart', 'keydown', 'pointerdown'];
+  const observer = new ResizeObserver(function() { target.scrollIntoView({ behavior: 'instant', block: 'start' }); });
+  const stop = function() {
+    observer.disconnect();
+    clearTimeout(timer);
+    userEvents.forEach(function(name) { window.removeEventListener(name, stop); });
+  };
+  const timer = setTimeout(stop, 10000);
+  userEvents.forEach(function(name) { window.addEventListener(name, stop, { passive: true }); });
+  observer.observe(document.body);
+}
+
 /* ─── BOOT ────────────────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', function() {
 
@@ -2794,6 +2817,8 @@ document.addEventListener('DOMContentLoaded', function() {
       if (e.key === 'ArrowLeft')  lightboxPrev();
     } catch (err) { console.error('keydown handler failed:', err); }
   });
+
+  try { keepHashTargetInView(); } catch (e) { console.warn('hash target alignment failed:', e); }
 
   (function() {
     function run() {
