@@ -1663,46 +1663,154 @@ footer { flex-wrap: wrap; gap: 1rem 2rem; }
 .contact-form-note { font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 12px; }
 .newsletter-privacy { font-size: 10px; color: var(--muted); text-align: center; margin-top: 4px; }
 
-/* ─── POLICY PAGES (commissions, shipping, returns, privacy) ──────────────── */
-.policy-page { max-width: 780px; margin: 0 auto; padding: 4.5rem 3rem 5rem; }
+/* ─── POLICY PAGES (commissions, shipping, returns, privacy) ──────────────────
+   Long-form reading pages: serif body text at a comfortable size and measure,
+   with the mono face kept for small labels. --policy-text and --policy-label
+   are darker than --muted and --gold so small text stays easy to read. */
+.policy-page {
+  --policy-text: #4a443b;
+  --policy-label: #86662f;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 20px; line-height: 1.6; color: var(--policy-text);
+}
+.policy-hero {
+  background: var(--parchment); border-bottom: 1px solid var(--border);
+  padding: 4.5rem 1.5rem 3.5rem; text-align: center;
+}
+.policy-hero-inner { max-width: 680px; margin: 0 auto; }
+.policy-eyebrow {
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--policy-label); margin-bottom: 1rem;
+}
 .policy-title {
-  font-family: 'Cormorant Garamond', serif; font-size: clamp(36px, 5vw, 52px);
-  font-weight: 300; line-height: 1.1; margin-bottom: 1rem;
+  font-size: clamp(40px, 6vw, 60px); font-weight: 300; line-height: 1.05;
+  color: var(--ink); margin-bottom: 1.1rem;
 }
-.policy-lede { color: var(--muted); font-size: 15px; line-height: 1.8; margin-bottom: 1.5rem; }
-.policy-updated { font-size: 11px; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 1rem; }
-.policy-page h2 {
-  font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 400;
-  margin: 2.75rem 0 0.9rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+.policy-lede { font-size: clamp(21px, 2.6vw, 24px); line-height: 1.45; }
+
+.policy-body { max-width: 760px; margin: 0 auto; padding: 0 1.5rem 5rem; }
+
+/* Key facts */
+.policy-facts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem; margin: 2.5rem 0 0;
 }
-.policy-page p, .policy-page li { color: var(--muted); font-size: 14px; line-height: 1.85; }
-.policy-page p { margin-bottom: 0.9rem; }
-.policy-page ul, .policy-page ol { padding-left: 1.25rem; margin-bottom: 0.9rem; }
-.policy-page li { margin-bottom: 0.45rem; }
-.policy-page strong { color: var(--ink); font-weight: 400; }
-.policy-page a { color: var(--ink); text-underline-offset: 2px; }
-.policy-page a:hover { color: var(--gold); }
-.policy-page .policy-price {
-  font-family: 'Cormorant Garamond', serif; font-size: 24px; color: var(--gold);
-  margin: 0.25rem 0 1rem;
+.policy-fact { background: #fff; border: 1px solid var(--border); padding: 1.1rem 1.15rem; }
+.policy-fact-value { display: block; font-size: 26px; line-height: 1.15; color: var(--ink); margin-bottom: 0.35rem; }
+.policy-fact-label { display: block; font-family: 'DM Mono', monospace; font-size: 11px; line-height: 1.5; letter-spacing: 0.02em; }
+
+/* On this page */
+.policy-jump { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1.75rem; }
+.policy-page a.policy-jump-link {
+  font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.03em;
+  padding: 6px 14px; border: 1px solid var(--border); border-radius: 999px;
+  color: var(--policy-text); text-decoration: none; transition: all 0.2s;
 }
-.policy-table-wrap { overflow-x: auto; margin-bottom: 0.9rem; }
-.policy-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.policy-table th, .policy-table td {
-  text-align: left; padding: 0.65rem 0.75rem 0.65rem 0;
-  border-bottom: 1px solid var(--border); color: var(--muted); vertical-align: top;
+.policy-page a.policy-jump-link:hover { border-color: var(--gold); color: var(--ink); }
+
+/* Sections */
+.policy-section { padding-top: 3.25rem; }
+.policy-section h2 {
+  font-size: 34px; font-weight: 400; line-height: 1.15; color: var(--ink);
+  margin-bottom: 1rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border);
 }
+.policy-section h3 {
+  font-size: 23px; font-weight: 600; line-height: 1.25; color: var(--ink);
+  margin: 1.75rem 0 0.5rem;
+}
+.policy-section h3:first-of-type { margin-top: 1.25rem; }
+.policy-page p { margin-bottom: 1rem; }
+.policy-page p:last-child { margin-bottom: 0; }
+.policy-page strong { color: var(--ink); font-weight: 600; }
+.policy-page a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; overflow-wrap: anywhere; }
+.policy-page a:hover { color: var(--policy-label); }
+
+/* Plain lists */
+.policy-list { list-style: none; margin-bottom: 1rem; }
+.policy-list li { position: relative; padding-left: 1.35rem; margin-bottom: 0.6rem; }
+.policy-list li::before {
+  content: ''; position: absolute; left: 0; top: 0.65em;
+  width: 7px; height: 7px; border-radius: 50%; background: var(--gold);
+}
+
+/* Numbered steps */
+.policy-steps { list-style: none; counter-reset: step; margin: 1.25rem 0 0; }
+.policy-steps li {
+  counter-increment: step; position: relative;
+  padding: 0 0 1.5rem 3.5rem; min-height: 3.25rem;
+}
+.policy-steps li::before {
+  content: counter(step); position: absolute; left: 0; top: 0;
+  width: 2.25rem; height: 2.25rem; border-radius: 50%;
+  border: 1px solid var(--gold); background: #fff; color: var(--policy-label);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 19px; line-height: 1;
+}
+.policy-steps li:not(:last-child)::after {
+  content: ''; position: absolute; left: calc(1.125rem - 0.5px); top: 2.25rem; bottom: 0;
+  border-left: 1px solid var(--border);
+}
+.policy-steps li:last-child { padding-bottom: 0; }
+.policy-step-title { display: block; font-size: 23px; font-weight: 600; line-height: 1.3; color: var(--ink); margin-bottom: 0.15rem; }
+
+/* Tables */
+.policy-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--border); margin-bottom: 1rem; }
+.policy-table th, .policy-table td { text-align: left; padding: 0.8rem 1.1rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+.policy-table tr:last-child td { border-bottom: none; }
 .policy-table th {
-  font-size: 10px; font-weight: 400; letter-spacing: 0.1em;
-  text-transform: uppercase; color: var(--gold);
+  font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 400;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--policy-label); background: var(--parchment);
 }
-.policy-page a.policy-cta {
-  display: inline-block; margin-top: 0.75rem; padding: 12px 28px;
+.policy-table td:first-child { color: var(--ink); }
+
+/* Print production week */
+.policy-week { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin: 1rem 0; }
+.policy-week-day { background: #fff; border: 1px solid var(--border); padding: 0.9rem 1rem; font-size: 18px; line-height: 1.35; }
+.policy-week-name {
+  display: block; font-family: 'DM Mono', monospace; font-size: 10px;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--policy-label); margin-bottom: 0.35rem;
+}
+
+/* Callouts */
+.policy-callout {
+  background: var(--parchment); border-left: 3px solid var(--gold);
+  padding: 1.1rem 1.35rem; margin: 1.25rem 0;
+}
+.policy-callout-title { display: block; font-size: 23px; font-weight: 600; line-height: 1.3; color: var(--ink); margin-bottom: 0.25rem; }
+
+/* Commission types (moved from the front page) */
+.policy-page .commissions-grid { gap: 2rem; margin: 0; }
+.policy-page .commission-block-title { font-size: 25px; margin-bottom: 0.4rem; }
+.policy-page .commission-block-body { font-size: inherit; line-height: inherit; color: inherit; }
+
+/* Closing call to action */
+.policy-end {
+  text-align: center; margin-top: 3.5rem; padding: 2.5rem 1.5rem;
+  background: var(--ink); color: rgba(255,255,255,0.75);
+}
+.policy-end-title { font-size: 32px; font-weight: 300; font-style: italic; color: var(--warm-white); margin-bottom: 0.5rem; }
+.policy-page .policy-end a { color: var(--warm-white); }
+.policy-page .policy-end a.policy-cta {
+  display: inline-block; margin-top: 0.75rem; padding: 13px 28px;
   background: var(--gold); color: #fff; text-decoration: none;
-  font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  transition: background 0.2s;
 }
-.policy-page a.policy-cta:hover { background: var(--gold-light); color: #fff; }
-.policy-page .commissions-grid { margin: 1.5rem 0; gap: 2rem; }
+.policy-page .policy-end a.policy-cta:hover { background: var(--gold-light); }
+.policy-updated { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.04em; margin-top: 2.5rem; text-align: center; }
+
+@media (max-width: 700px) {
+  .policy-page { font-size: 19px; }
+  .policy-hero { padding: 2.75rem 1.25rem 2.5rem; }
+  .policy-body { padding: 0 1.25rem 3.5rem; }
+  .policy-section { padding-top: 2.5rem; }
+  .policy-section h2 { font-size: 30px; }
+  .policy-week { grid-template-columns: 1fr; }
+  .policy-table th, .policy-table td { padding: 0.7rem 0.8rem; }
+  .policy-steps li { padding-left: 3rem; }
+}
 
 /* ─── MOBILE WIDTH FIXES ──────────────────────────────────────────────────────
    Keeps every page and panel inside the screen on a phone.
@@ -1728,7 +1836,7 @@ footer { flex-wrap: wrap; gap: 1rem 2rem; }
 .collections-input-row input { min-width: 0; }
 .add-panel-body, .orders-panel-body { overflow-x: hidden; }
 .gelato-import-item-uid { white-space: normal; overflow-wrap: anywhere; }
-.order-detail-val, .contact-link, .policy-page a { overflow-wrap: anywhere; }
+.order-detail-val, .contact-link { overflow-wrap: anywhere; }
 .order-detail-grid > * { min-width: 0; }
 .order-card-head { flex-wrap: wrap; gap: 0.25rem 1rem; }
 .artwork-label { gap: 0.5rem; flex-wrap: wrap; }
@@ -1743,7 +1851,6 @@ footer { flex-wrap: wrap; gap: 1rem 2rem; }
   .admin-btn { white-space: normal; padding: 7px 8px; }
 }
 @media (max-width: 700px) {
-  .policy-page { padding: 2.5rem 1.25rem 3.5rem; }
   .modal-overlay { padding: 0.5rem; }
   .modal { max-height: 96vh; }
   .add-panel-head, .add-panel-footer, .orders-panel-head, .cart-head, .cart-footer { padding: 1rem 1.25rem; }
