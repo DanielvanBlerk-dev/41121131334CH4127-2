@@ -138,6 +138,11 @@ nav {
   font-weight: 300; font-style: italic;
   color: var(--gold); margin-bottom: 2rem; line-height: 1.3;
 }
+.hero-painting {
+  display: block; width: 100%; height: auto;
+  margin: 0 auto 2.25rem;
+  border: 1px solid var(--border);
+}
 .hero-body {
   color: var(--muted); line-height: 1.9; font-size: 14px;
   width: 100%; max-width: 100%; margin: 0 auto 1rem;
