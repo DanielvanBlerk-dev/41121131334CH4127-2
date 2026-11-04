@@ -192,6 +192,28 @@ async function apiFetch(path, options = {}) {
   return res.json();
 }
 
+/* ─── LIMITED-TIME OFFER LABELS ───────────────────────────────────────────── */
+/**
+ * True while an offer's end date (YYYY-MM-DD) hasn't passed. The date runs to
+ * the end of that day in Queensland (UTC+10, no daylight saving), wherever
+ * the visitor is.
+ */
+function offerIsLive(ends) {
+  if (!ends) return false;
+  const endsAt = Date.parse(ends + 'T23:59:59.999+10:00');
+  return Number.isFinite(endsAt) && Date.now() <= endsAt;
+}
+
+/**
+ * The label to show on a card. Prefers the selected size's own offer, then
+ * any other size in the group, so a print run deadline only needs entering
+ * on one size of a grouped listing.
+ */
+function liveOfferLabel(art, group) {
+  const match = [art, ...group].find(a => a.offerLabel && offerIsLive(a.offerEnds));
+  return match ? match.offerLabel : null;
+}
+
 /* ─── GALLERY ─────────────────────────────────────────────────────────────── */
 async function loadArtworks() {
   try {
@@ -425,6 +447,14 @@ function renderCardContent(card, group) {
   const mediumEl = document.createElement('div'); mediumEl.className = 'artwork-medium'; mediumEl.textContent = art.medium || '';
 
   card.appendChild(imgWrap); card.appendChild(labelRow); card.appendChild(mediumEl);
+
+  const offerLabel = liveOfferLabel(art, group);
+  if (offerLabel) {
+    const offerEl = document.createElement('div');
+    offerEl.className = 'artwork-offer';
+    offerEl.textContent = offerLabel;
+    card.appendChild(offerEl);
+  }
 
   // Remaining-stock note — Original Print listings only, and only while
   // still available (once sold out the "Sold" overlay/button already say
@@ -980,12 +1010,14 @@ function openAddPanel() {
   ['new-title', 'new-medium', 'new-price',
    'new-weight', 'new-length', 'new-width', 'new-height',
    'new-gelato-uid', 'new-print-group', 'new-variant-label',
-   'new-stock-limit', 'new-op-print-group', 'new-op-variant-label'].forEach(id => {
+   'new-stock-limit', 'new-op-print-group', 'new-op-variant-label',
+   'new-offer-label', 'new-offer-ends'].forEach(id => {
     const field = el(id);
     if (field) field.value = '';
   });
   el('new-category').value    = 'seascape';
   el('new-sold').checked      = false;
+  el('offer-status-note').textContent = 'The label disappears by itself after this date. The listing stays on sale.';
   el('listing-type-original').checked = true;
   el('add-error').textContent = '';
   el('gelato-import-message').textContent = '';
@@ -1026,6 +1058,11 @@ function openEditPanel(art) {
   el('new-category').value = art.category === 'figurative' ? 'figurative' : 'seascape';
   el('new-sold').checked   = !!art.sold;
   el('add-error').textContent = '';
+  el('new-offer-label').value = art.offerLabel || '';
+  el('new-offer-ends').value  = art.offerEnds  || '';
+  el('offer-status-note').textContent = (art.offerLabel && !offerIsLive(art.offerEnds))
+    ? 'This label has expired and is hidden from visitors. Set a new date to show it again, or clear both fields.'
+    : 'The label disappears by itself after this date. The listing stays on sale.';
 
   const type = art.source === 'gelato' ? 'gelato'
              : art.source === 'original-print' ? 'original-print'
@@ -1254,11 +1291,19 @@ async function saveNewPainting() {
     if (isNaN(height) || height <= 0) { errEl.textContent = 'Please enter the packed height in cm.'; return; }
   }
 
+  const offerLabel = el('new-offer-label').value.trim();
+  const offerEnds  = el('new-offer-ends').value;
+  if (offerLabel && !offerEnds) { errEl.textContent = 'Please choose the last day to show the label.'; return; }
+  if (offerEnds && !offerLabel) { errEl.textContent = 'Please enter the label text, or clear the date.'; return; }
+  if (hasHtml(offerLabel))      { errEl.textContent = 'The label cannot contain < or >.'; return; }
+
   errEl.textContent = '';
   btn.disabled = true; btn.textContent = 'Saving…';
 
   const body = {
     title, medium, price, category, sold, oversized,
+    offerLabel: offerLabel || null,
+    offerEnds:  offerEnds  || null,
     source: isGelato ? 'gelato' : isOriginalPrint ? 'original-print' : 'original',
     collections: newCollections,
   };
@@ -1383,7 +1428,24 @@ function removeFromCart(id) {
   updateCartUI(); renderGallery();
 }
 
+/* The cart lives in memory, so it's saved by id for the tab's session to
+   survive moving between the shop and the policy pages. Restored listings are
+   looked up fresh, so anything since sold or removed simply drops out, and the
+   server re-checks everything at payment regardless. */
+const CART_KEY = 'atelier_cart_ids';
+function saveCart() {
+  try { sessionStorage.setItem(CART_KEY, JSON.stringify(cart.map(i => i.id))); } catch {}
+}
+function restoreCart() {
+  try {
+    const ids = JSON.parse(sessionStorage.getItem(CART_KEY) || '[]');
+    if (!Array.isArray(ids)) return;
+    cart = artworks.filter(a => ids.includes(a.id) && !a.sold && !a.oversized);
+  } catch {}
+}
+
 function updateCartUI() {
+  saveCart();
   try {
     const count = cart.length;
     el('cart-count').textContent = count;
@@ -1908,7 +1970,9 @@ function renderAusPostServices(data, resultEl, isIntl, countryName, postcode, it
 
     const disclaimer = document.createElement('p'); disclaimer.className = 'postage-disclaimer';
     disclaimer.textContent = isIntl
-      ? 'International shipments may be subject to customs duties or import taxes charged by the destination country — these are the responsibility of the buyer and are not included in the price shown. Michael will confirm and dispatch once payment is received.'
+      ? (getSelectedCountry().code === 'US'
+          ? 'Any US import duties and clearance fees are prepaid by Michael when your order ships, so there is nothing extra to pay on delivery. Michael will confirm and dispatch once payment is received.'
+          : 'International shipments may be subject to customs duties or import taxes charged by the destination country — these are the responsibility of the buyer and are not included in the price shown. Michael will confirm and dispatch once payment is received.')
       : (itemCount === 1
           ? 'Selected postage will be added to your total. Michael will confirm and dispatch once payment is received.'
           : 'Combined postage for all ' + itemCount + ' works. Each will be carefully packaged and dispatched separately once payment is received.');
@@ -2138,6 +2202,16 @@ async function calculatePostage(opts) {
 }
 
 /* ─── CONTACT FORM ────────────────────────────────────────────────────────── */
+// Fills the form's country list from the checkout's, so there's one list to
+// maintain. Starts on whatever preselectCountryFromBrowser() chose there.
+function initContactCountry() {
+  const source = el('country');
+  const target = el('contact-country');
+  if (!source || !target) return;
+  target.innerHTML = source.innerHTML;
+  target.value = source.value;
+}
+
 async function submitContactForm() {
   const errEl  = el('contact-form-error');
   const succEl = el('contact-form-success');
@@ -2145,16 +2219,20 @@ async function submitContactForm() {
   try {
     const name    = el('contact-name').value.trim();
     const email   = el('contact-email').value.trim();
-    const message = el('contact-message').value.trim();
+    const subject  = el('contact-subject').value.trim();
+    const size     = el('contact-size').value.trim();
+    const budget   = el('contact-budget').value;
+    const timeline = el('contact-timeline').value;
+    const country  = el('contact-country').value;
     errEl.textContent = ''; succEl.textContent = '';
     if (!name)    { errEl.textContent = 'Please enter your name.'; return; }
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { errEl.textContent = 'Please enter a valid email address.'; return; }
-    if (!message) { errEl.textContent = 'Please enter a message.'; return; }
+    if (!subject) { errEl.textContent = 'Please enter a subject or reference painting.'; return; }
     btn.disabled = true; btn.textContent = 'Sending…';
-    const data = await apiFetch('/api/contact', { method: 'POST', body: JSON.stringify({ name, email, message }) });
+    const data = await apiFetch('/api/contact', { method: 'POST', body: JSON.stringify({ name, email, subject, size, budget, timeline, country }) });
     if (data.fallback) { errEl.innerHTML = data.error + ' — <a href="mailto:michael.p.vanblerk@gmail.com" style="color:#f5a0a0;">michael.p.vanblerk@gmail.com</a>'; return; }
     succEl.textContent = 'Message sent — Michael will be in touch soon.';
-    el('contact-name').value = ''; el('contact-email').value = ''; el('contact-message').value = '';
+    ['contact-name', 'contact-email', 'contact-subject', 'contact-size', 'contact-budget', 'contact-timeline'].forEach(function(id) { el(id).value = ''; });
   } catch (e) {
     errEl.textContent = e.message || 'Message could not be sent. Please email Michael directly.';
   } finally { btn.disabled = false; btn.textContent = 'Send message'; }
@@ -2514,7 +2592,7 @@ async function processPayment(sourceId, fields) {
     });
     if (squareCard && squareCard.clear) await squareCard.clear();
     await loadArtworks();
-    cart = []; selectedPostage = null; selectedGelatoPostage = null;
+    cart = []; saveCart(); selectedPostage = null; selectedGelatoPostage = null;
     updateCartUI(); showSuccess(data.orderId);
   } catch (e) {
     const msg = isSafeServerMessage(e.message)
@@ -2654,6 +2732,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // (e.g. en-US -> United States). Falls back to Australia, the default, when
   // the browser gives no region or the region isn't in the list.
   try { preselectCountryFromBrowser(); } catch (e) { console.warn('country preselect failed:', e); }
+  try { initContactCountry(); } catch (e) { console.warn('contact country list failed:', e); }
 
   document.addEventListener('keydown', function(e) {
     try {
@@ -2667,6 +2746,7 @@ document.addEventListener('DOMContentLoaded', function() {
   (function() {
     function run() {
       loadArtworks().then(function() {
+        restoreCart();
         try { renderGallery(); } catch(e) {
           console.error('renderGallery failed:', e);
           ['gallery-grid'].forEach(function(id) {
@@ -2675,6 +2755,8 @@ document.addEventListener('DOMContentLoaded', function() {
           });
         }
         try { updateCartUI(); } catch(e) { console.error('updateCartUI failed:', e); }
+        // The policy pages' Cart link lands here as /#cart
+        try { if (location.hash === '#cart' && cart.length > 0) openCart(); } catch(e) { console.error('openCart failed:', e); }
         try { if (isLoggedIn()) activateAdminMode(); } catch(e) { console.error('activateAdminMode failed:', e); }
         try { scheduleNewsletterPopup(); } catch(e) { console.error('scheduleNewsletterPopup failed:', e); }
       }).catch(function(e) {

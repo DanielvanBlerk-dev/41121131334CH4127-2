@@ -144,50 +144,6 @@ nav {
 }
 .hero-body:last-child { margin-bottom: 0; }
 
-/* ─── NIGHT SEA COLLECTION ANNOUNCEMENT ──────────────────────────────────────
-   Launch banner — intentionally self-contained so it's easy to remove later:
-   delete the #night-sea-announcement <section> in index.html and this block
-   when the initial push settles. No JS dependency, no other selectors touch
-   these classes. */
-.announcement-banner {
-  background: var(--accent);
-  border-bottom: 1px solid var(--border);
-  padding: 2.25rem 3rem;
-  text-align: center;
-}
-.announcement-inner { max-width: 640px; margin: 0 auto; }
-.announcement-headline {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: clamp(20px, 2.4vw, 26px);
-  font-weight: 300; font-style: italic;
-  color: var(--gold-light);
-  margin-bottom: 0.6rem;
-}
-.announcement-body {
-  color: rgba(249,246,241,0.75);
-  line-height: 1.8; font-size: 13px;
-  margin-bottom: 1.25rem;
-}
-.announcement-note {
-  font-family: 'DM Mono', monospace;
-  font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
-  color: var(--gold-light);
-  margin: -0.5rem 0 1.25rem;
-}
-.announcement-cta {
-  display: inline-block;
-  font-family: 'DM Mono', monospace;
-  font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
-  color: var(--ink); background: var(--gold);
-  padding: 0.75rem 1.75rem; text-decoration: none;
-  border: 1px solid var(--gold); transition: all 0.2s ease;
-}
-.announcement-cta:hover { background: var(--gold-light); border-color: var(--gold-light); }
-
-@media (max-width: 600px) {
-  .announcement-banner { padding: 1.75rem 1.25rem; }
-}
-
 /* ─── SHARED SECTION ──────────────────────────────────────────────────────── */
 .section { padding: 5rem 3rem; }
 .section-header {
@@ -1650,3 +1606,156 @@ footer {
 .analytics-count { font-family: 'Cormorant Garamond', serif; font-size: 24px; color: var(--gold); }
 .analytics-pct   { flex-basis: 100%; font-size: 10px; letter-spacing: 0.06em; color: var(--muted); }
 .analytics-note  { font-size: 11px; color: var(--muted); line-height: 1.7; margin: 1.25rem 0; }
+
+/* ─── INLINE LINKS ────────────────────────────────────────────────────────── */
+.inline-link { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.inline-link:hover { color: var(--gold); }
+
+/* ─── LIMITED-TIME OFFER LABEL (gallery card) ─────────────────────────────── */
+.artwork-offer {
+  font-size: 10px; color: var(--accent); margin-top: 4px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+
+/* ─── MAIN NAV LINKS ──────────────────────────────────────────────────────── */
+html { scroll-padding-top: 84px; }
+.nav-links { display: flex; align-items: center; flex-wrap: wrap; gap: 1.1rem; margin-left: auto; }
+.nav-right { flex: 0 0 auto; margin-left: 1.1rem; }
+.nav-toggle {
+  display: none; background: none; border: 1px solid var(--border); cursor: pointer;
+  padding: 8px 12px; color: var(--ink); font-family: 'DM Mono', monospace;
+  font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+}
+.nav-cart-link { border: 1px solid var(--border); padding: 8px 18px; color: var(--ink); }
+.nav-link[aria-current="page"] { color: var(--ink); }
+
+/* The admin bar stays pinned above the nav on wide screens. */
+.admin-bar.visible + nav { top: 44px; }
+
+@media (max-width: 1100px) {
+  .nav-toggle { display: block; }
+  .nav-right { margin-left: auto; gap: 0.6rem; }
+  .nav-links {
+    display: none; order: 3; flex: 1 0 100%; margin-left: 0;
+    flex-direction: column; align-items: stretch; gap: 0;
+    border-top: 1px solid var(--border); padding-top: 0.25rem;
+    max-height: calc(100vh - 80px); overflow-y: auto;
+  }
+  .nav-links.open { display: flex; }
+  .nav-links .nav-link {
+    font-size: 12px; letter-spacing: 0.08em; padding: 0.7rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-links .nav-link:last-child { border-bottom: none; }
+}
+
+/* ─── FOOTER LINKS AND CHECKOUT POLICY LINKS ──────────────────────────────── */
+footer { flex-wrap: wrap; gap: 1rem 2rem; }
+.footer-links { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; }
+.footer-links a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+.footer-links a:hover { color: var(--ink); }
+.checkout-policy-links {
+  display: flex; flex-wrap: wrap; gap: 0.25rem 1rem;
+  font-size: 11px; margin-top: 8px;
+}
+.checkout-policy-links a { color: var(--muted); text-underline-offset: 2px; }
+.checkout-policy-links a:hover { color: var(--gold); }
+.contact-form-note { font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 12px; }
+.newsletter-privacy { font-size: 10px; color: var(--muted); text-align: center; margin-top: 4px; }
+
+/* ─── POLICY PAGES (commissions, shipping, returns, privacy) ──────────────── */
+.policy-page { max-width: 780px; margin: 0 auto; padding: 4.5rem 3rem 5rem; }
+.policy-title {
+  font-family: 'Cormorant Garamond', serif; font-size: clamp(36px, 5vw, 52px);
+  font-weight: 300; line-height: 1.1; margin-bottom: 1rem;
+}
+.policy-lede { color: var(--muted); font-size: 15px; line-height: 1.8; margin-bottom: 1.5rem; }
+.policy-updated { font-size: 11px; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 1rem; }
+.policy-page h2 {
+  font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 400;
+  margin: 2.75rem 0 0.9rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+}
+.policy-page p, .policy-page li { color: var(--muted); font-size: 14px; line-height: 1.85; }
+.policy-page p { margin-bottom: 0.9rem; }
+.policy-page ul, .policy-page ol { padding-left: 1.25rem; margin-bottom: 0.9rem; }
+.policy-page li { margin-bottom: 0.45rem; }
+.policy-page strong { color: var(--ink); font-weight: 400; }
+.policy-page a { color: var(--ink); text-underline-offset: 2px; }
+.policy-page a:hover { color: var(--gold); }
+.policy-page .policy-price {
+  font-family: 'Cormorant Garamond', serif; font-size: 24px; color: var(--gold);
+  margin: 0.25rem 0 1rem;
+}
+.policy-table-wrap { overflow-x: auto; margin-bottom: 0.9rem; }
+.policy-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.policy-table th, .policy-table td {
+  text-align: left; padding: 0.65rem 0.75rem 0.65rem 0;
+  border-bottom: 1px solid var(--border); color: var(--muted); vertical-align: top;
+}
+.policy-table th {
+  font-size: 10px; font-weight: 400; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--gold);
+}
+.policy-page a.policy-cta {
+  display: inline-block; margin-top: 0.75rem; padding: 12px 28px;
+  background: var(--gold); color: #fff; text-decoration: none;
+  font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+}
+.policy-page a.policy-cta:hover { background: var(--gold-light); color: #fff; }
+.policy-page .commissions-grid { margin: 1.5rem 0; gap: 2rem; }
+
+/* ─── MOBILE WIDTH FIXES ──────────────────────────────────────────────────────
+   Keeps every page and panel inside the screen on a phone.
+   - `clip` doesn't create a scroll container, so sticky keeps working (plain
+     overflow hidden on html is what broke the sticky nav before).
+   - Closed off-canvas panels are hidden so they can't widen the page.
+   - Inputs are 16px on phones because iOS zooms in on anything smaller when
+     it's focused, which then leaves the page side-scrolling. */
+@supports (overflow: clip) {
+  html, body { overflow-x: clip; }
+}
+.cart-panel, .add-panel, .orders-panel {
+  visibility: hidden;
+  transition: transform 0.35s cubic-bezier(0.4,0,0.2,1), visibility 0s linear 0.35s;
+}
+.cart-panel.open, .add-panel.open, .orders-panel.open {
+  visibility: visible;
+  transition: transform 0.35s cubic-bezier(0.4,0,0.2,1), visibility 0s;
+}
+.admin-bar-actions { flex-shrink: 1; min-width: 0; max-width: 100%; }
+.form-row > *, .form-group, .gelato-import-item-title { min-width: 0; }
+.form-group textarea, .form-group input, .form-group select { max-width: 100%; }
+.collections-input-row input { min-width: 0; }
+.add-panel-body, .orders-panel-body { overflow-x: hidden; }
+.gelato-import-item-uid { white-space: normal; overflow-wrap: anywhere; }
+.order-detail-val, .contact-link, .policy-page a { overflow-wrap: anywhere; }
+.order-detail-grid > * { min-width: 0; }
+.order-card-head { flex-wrap: wrap; gap: 0.25rem 1rem; }
+.artwork-label { gap: 0.5rem; flex-wrap: wrap; }
+.login-overlay, .confirm-overlay { padding: 1rem; }
+
+@media (max-width: 900px) {
+  /* Two rows of buttons would cover too much of a small screen if pinned. */
+  .admin-bar { position: static; }
+  .admin-bar.visible + nav { top: 0; }
+  .admin-bar-left, .admin-bar-actions { width: 100%; }
+  .admin-bar-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; }
+  .admin-btn { white-space: normal; padding: 7px 8px; }
+}
+@media (max-width: 700px) {
+  .policy-page { padding: 2.5rem 1.25rem 3.5rem; }
+  .modal-overlay { padding: 0.5rem; }
+  .modal { max-height: 96vh; }
+  .add-panel-head, .add-panel-footer, .orders-panel-head, .cart-head, .cart-footer { padding: 1rem 1.25rem; }
+  .add-panel-body, .orders-panel-body, .cart-items { padding: 1.25rem; }
+  .login-box, .image-settings-box, .analytics-box, .newsletter-box { padding: 1.5rem; }
+  .image-settings-overlay, .analytics-overlay, .newsletter-overlay { padding: 0.75rem; }
+  .listing-type-option { flex: 1 1 100%; }
+  .gelato-fields { padding: 0.75rem; }
+  .form-group input, .form-group select, .form-group textarea,
+  .contact-form-input { font-size: 16px; }
+  .cart-item { grid-template-columns: 56px 1fr auto; gap: 0.75rem; }
+  .cart-item-thumb { width: 56px; min-height: 56px; }
+  .nav-cart-link { padding: 5px 10px; }
+  .nav-toggle { padding: 5px 10px; font-size: 9px; }
+}

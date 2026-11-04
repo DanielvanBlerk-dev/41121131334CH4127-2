@@ -74,6 +74,15 @@
       ]
     },
     {
+      "source": "/nav.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
       "source": "/square-config.js",
       "headers": [
         {
@@ -132,6 +141,10 @@
     }
   },
   "rewrites": [
+    { "source": "/commissions", "destination": "/commissions.html" },
+    { "source": "/shipping", "destination": "/shipping.html" },
+    { "source": "/returns", "destination": "/returns.html" },
+    { "source": "/privacy", "destination": "/privacy.html" },
     {
       "source": "/.well-known/apple-developer-merchantid-domain-association",
       "destination": "/api/apple-pay-verify"

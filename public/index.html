@@ -140,12 +140,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 
   <!-- ── STYLES ─────────────────────────────────────────────────────────── -->
-  <link rel="stylesheet" href="style.css?v=27">
+  <link rel="stylesheet" href="style.css?v=28">
 
   <!-- ── SQUARE + APP SCRIPTS ──────────────────────────────────────────── -->
   <script src="https://web.squarecdn.com/v1/square.js" defer></script>
   <script src="square-config.js?v=6" defer></script>
-  <script src="script.js?v=27" defer></script>
+  <script src="script.js?v=28" defer></script>
+  <script src="nav.js?v=1" defer></script>
 
   <script>
     window.va = window.va || function () {
@@ -175,15 +176,21 @@
   <!-- ── NAV ───────────────────────────────────────────────────────────── -->
   <nav role="navigation" aria-label="Main">
     <a href="#" class="nav-logo">Airlie Beach Art</a>
-    <div class="nav-right">
+    <div class="nav-links" id="nav-links">
       <a href="#gallery" class="nav-link">Gallery</a>
-      <a href="#commissions" class="nav-link">Commissions</a>
+      <a href="/commissions" class="nav-link">Commissions</a>
+      <a href="/shipping" class="nav-link">Shipping</a>
+      <a href="/returns" class="nav-link">Returns</a>
+      <a href="/privacy" class="nav-link">Privacy</a>
       <a href="#about" class="nav-link">About</a>
       <a href="#contact" class="nav-link">Contact</a>
+    </div>
+    <div class="nav-right">
       <a href="#" class="nav-link" id="admin-nav-link" title="Owner login" aria-label="Owner login">&#9679;</a>
       <button class="cart-btn" id="cart-toggle-btn" aria-label="Open cart">
         Cart <span class="cart-count" id="cart-count">0</span>
       </button>
+      <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav-links">Menu</button>
     </div>
   </nav>
 
@@ -197,24 +204,8 @@
         Airlie Beach Art is the home of artist Michael van Blerk — nocturnal seascapes and powerful figurative work rooted in the Baroque tradition, united by a single idea: light finding its way through darkness.
       </p>
       <p class="hero-body">
-        All works are original oil on canvas, available for sale and commission.
+        All works are original oil on canvas, available for sale and <a href="/commissions" class="inline-link">commission</a>.
       </p>
-    </div>
-  </section>
-
-  <!--
-    ── NIGHT SEA COLLECTION ANNOUNCEMENT ────────────────────────────────
-    Launch banner for the Night Sea Collection. Intentionally easy to
-    take down once the initial push settles — just delete this <section>
-    (and its matching CSS block in style.css) when it's no longer needed.
-    No JS dependency.
-  -->
-  <section class="announcement-banner" id="night-sea-announcement" aria-label="Night Sea Collection announcement">
-    <div class="announcement-inner">
-      <p class="announcement-headline">The Night Sea Collection is live</p>
-      <p class="announcement-body">Nine original oil paintings and fine art prints exploring the idea of light finding its way through darkness. View the full collection below.</p>
-      <p class="announcement-note">Print run closes 19 October.</p>
-      <a href="#gallery" class="announcement-cta">View the Collection</a>
     </div>
   </section>
 
@@ -223,8 +214,8 @@
     <div class="gallery-section-header">
       <h2 class="gallery-section-title">Airlie Beach Art — Original Paintings</h2>
       <p class="gallery-section-body">Michael's work moves between two disciplines, united by a single idea: light finding its way through darkness. His seascapes explore moonlit cloud, storm-lit water and the particular quiet of the sea after dark, painted alla prima in the tradition of 19th-century marine painters like Aivazovsky. His figurative paintings turn the same idea toward the human figure, in the tenebrist tradition of Caravaggio, Rembrandt and Rubens, engaging directly with sacred and theological subjects drawn from Scripture and church history.</p>
-      <p class="gallery-section-body">Original works are available for sale in a range of sizes. Commissions, including ecclesiastical and private commissions, are welcomed and quoted individually &mdash; contact Michael to discuss your project.</p>
-      <p class="gallery-section-note"><em>All works are original oil on canvas. Prices are listed per work in Australian dollars (AUD); the US dollar figure is an approximate guide only. Commission inquiries welcome.</em></p>
+      <p class="gallery-section-body">Original works are available for sale in a range of sizes. <a href="/commissions" class="inline-link">Commissions</a>, including ecclesiastical and private commissions, are welcomed and quoted individually &mdash; contact Michael to discuss your project.</p>
+      <p class="gallery-section-note"><em>All works are original oil on canvas. Prices are listed per work in Australian dollars (AUD); the US dollar figure is an approximate guide only. <a href="/commissions" class="inline-link">Commission inquiries welcome.</a></em></p>
     </div>
     <!--
       COLLECTIONS FILTER BAR
@@ -235,27 +226,6 @@
     -->
     <div class="collections-filter-bar hidden" id="collections-filter"></div>
     <div class="gallery" id="gallery-grid"></div>
-  </section>
-
-  <!-- ── COMMISSIONS ────────────────────────────────────────────────────── -->
-  <section class="section commissions-section" id="commissions" aria-label="Commissions">
-    <div class="section-header">
-      <h2 class="section-title">Commissions</h2>
-    </div>
-    <div class="commissions-body">
-      <p class="commissions-intro">Michael accepts commissions in both his seascape and figurative disciplines.</p>
-      <div class="commissions-grid">
-        <div class="commission-block">
-          <h3 class="commission-block-title">Seascape Commissions</h3>
-          <p class="commission-block-body">Bring a photograph, a location, or simply a mood you'd like captured, and Michael will paint it. Quoted based on size and complexity.</p>
-        </div>
-        <div class="commission-block">
-          <h3 class="commission-block-title">Figurative &amp; Devotional Commissions</h3>
-          <p class="commission-block-body">Sacred subjects, theological narratives, portraits in the classical tradition. Each commission is discussed individually to ensure the work serves its intended space and purpose. Ecclesiastical commissions particularly welcome.</p>
-        </div>
-      </div>
-      <p class="commissions-cta">To inquire about a commission, contact Michael directly. All commissions are quoted individually.</p>
-    </div>
   </section>
 
   <!-- ── ABOUT THE ARTIST ───────────────────────────────────────────────── -->
@@ -280,10 +250,9 @@
       <div class="about-text">
         <p class="about-para">Michael van Blerk is a self-taught oil painter based in Airlie Beach, Queensland, working in two distinct disciplines — atmospheric seascape and classical figurative painting — united by a single preoccupation: the way light finds its way through darkness.</p>
         <p class="about-para">His seascape work explores nocturnal and storm-lit water, painted alla prima, in the tradition of 19th-century marine painters like Aivazovsky. His figurative work is painted in the tradition of the Baroque masters — dark, psychologically intense oil paintings exploring sacred and theological subjects with unflinching seriousness and emotional weight.</p>
-        <p class="about-para">Michael exhibits locally and regionally and accepts commissions in both disciplines.</p>
+        <p class="about-para">Michael exhibits locally and regionally and accepts <a href="/commissions" class="inline-link">commissions</a> in both disciplines.</p>
         <ul class="about-credits">
           <li>Finalist, 2026 Great Barrier Reef Festival Art Exhibition. First place in the Proserpine Show.</li>
-          <li>Quality &amp; satisfaction guarantee on every work.</li>
         </ul>
       </div>
     </div>
@@ -295,7 +264,7 @@
       <h2 class="section-title">Contact</h2>
     </div>
     <div class="contact-body">
-      <p class="contact-intro">To purchase a work, inquire about a commission, or discuss an exhibition opportunity, contact Michael directly.</p>
+      <p class="contact-intro">To purchase a work, inquire about a <a href="/commissions" class="inline-link">commission</a>, or discuss an exhibition opportunity, contact Michael directly.</p>
       <ul class="contact-list">
         <li class="contact-item">
           <span class="contact-label">Email</span>
@@ -319,12 +288,44 @@
           <input type="email" id="contact-email" placeholder="jane@example.com" class="contact-form-input">
         </div>
         <div class="form-group">
-          <label for="contact-message" class="contact-form-label">Message</label>
-          <textarea id="contact-message" placeholder="I'd love to inquire about a commission…" class="contact-form-input contact-form-textarea" rows="5"></textarea>
+          <label for="contact-subject" class="contact-form-label">Subject or reference painting</label>
+          <textarea id="contact-subject" placeholder="A night seascape in the style of Flagship, a question about a listed work…" class="contact-form-input contact-form-textarea" rows="4"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="contact-size" class="contact-form-label">Size (optional)</label>
+          <input type="text" id="contact-size" placeholder="e.g. 60 × 90 cm" class="contact-form-input">
+        </div>
+        <div class="form-group">
+          <label for="contact-budget" class="contact-form-label">Budget range (optional)</label>
+          <select id="contact-budget" class="contact-form-input">
+            <option value="">Select a range</option>
+            <option value="under-500">Under AUD $500</option>
+            <option value="500-1000">AUD $500 to $1,000</option>
+            <option value="1000-2500">AUD $1,000 to $2,500</option>
+            <option value="2500-5000">AUD $2,500 to $5,000</option>
+            <option value="over-5000">Over AUD $5,000</option>
+            <option value="unsure">Not sure yet</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="contact-timeline" class="contact-form-label">Timeline (optional)</label>
+          <select id="contact-timeline" class="contact-form-input">
+            <option value="">Select a timeline</option>
+            <option value="flexible">Flexible</option>
+            <option value="within-3-months">Within 3 months</option>
+            <option value="within-6-months">Within 6 months</option>
+            <option value="specific-date">A specific date (mention it above)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <!-- Options are copied from the checkout's #country list by initContactCountry() in script.js. -->
+          <label for="contact-country" class="contact-form-label">Country</label>
+          <select id="contact-country" class="contact-form-input" autocomplete="country"></select>
         </div>
         <p class="contact-form-error" id="contact-form-error" role="alert"></p>
         <button class="contact-form-btn" id="contact-form-btn">Send message</button>
         <p class="contact-form-success" id="contact-form-success" role="status"></p>
+        <p class="contact-form-note">Your details are only used to reply to you. See the <a href="/privacy" class="inline-link">privacy policy</a>.</p>
       </div>
     </div>
   </section>
@@ -342,6 +343,12 @@
   <!-- ── FOOTER ────────────────────────────────────────────────────────── -->
   <footer role="contentinfo">
     <span class="footer-logo">Airlie Beach Art</span>
+    <div class="footer-links" aria-label="Site information">
+      <a href="/commissions">Commissions</a>
+      <a href="/shipping">Shipping</a>
+      <a href="/returns">Returns and damage</a>
+      <a href="/privacy">Privacy policy</a>
+    </div>
     <span>&#169; 2026 Michael van Blerk &middot; All works original &middot; Secure payment via Square</span>
     <span class="footer-ssl">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
@@ -671,6 +678,12 @@
           </div>
           <div id="card-container"></div>
           <p class="sq-card-message">Payments processed securely by Square. We never store your card details.</p>
+          <p class="checkout-policy-links">
+            <a href="/shipping" target="_blank" rel="noopener">Shipping</a>
+            <a href="/returns" target="_blank" rel="noopener">Returns and damage</a>
+            <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a>
+            <a href="/commissions" target="_blank" rel="noopener">Commissions</a>
+          </p>
           <p class="payment-error" id="payment-error" role="alert"></p>
           <button class="pay-btn" id="pay-btn">Complete Purchase</button>
         </div>
@@ -793,6 +806,7 @@
       <p class="newsletter-error" id="newsletter-error" role="alert"></p>
       <button class="newsletter-submit-btn" id="newsletter-submit-btn">Join the mailing list</button>
       <button class="newsletter-dismiss-btn" id="newsletter-dismiss-btn">No thanks</button>
+      <p class="newsletter-privacy">See the <a href="/privacy" class="inline-link">privacy policy</a>.</p>
       <p class="newsletter-success" id="newsletter-success" role="status"></p>
     </div>
   </div>
@@ -901,6 +915,23 @@
         blocks based on which radio is checked. This replaces the old
         standalone "Oversized" checkbox / updateOversizedToggle().
       -->
+      <!--
+        LIMITED-TIME OFFER LABEL (optional)
+        Shown on the gallery card until the end of the chosen date, Queensland
+        time, then hidden automatically by liveOfferLabel() in script.js. Only
+        the label expires: the listing itself stays on sale.
+      -->
+      <div class="form-section-title shipping-subhead">Limited-time label (optional)</div>
+      <div class="form-group">
+        <label for="new-offer-label">Label text</label>
+        <input type="text" id="new-offer-label" maxlength="80" placeholder="e.g. Print run closes 19 October">
+      </div>
+      <div class="form-group">
+        <label for="new-offer-ends">Last day shown</label>
+        <input type="date" id="new-offer-ends">
+        <p class="field-helper" id="offer-status-note">The label disappears by itself after this date. The listing stays on sale.</p>
+      </div>
+
       <div class="form-section-title shipping-subhead">Listing type</div>
       <div class="listing-type-group" role="radiogroup" aria-label="Listing type">
         <label class="listing-type-option">

@@ -12,8 +12,9 @@ import { capFields } from './_sanitize.js';
  * Handles two submission types, distinguished by the `type` field:
  *
  *   type: 'contact' (default, or omitted for backwards compatibility)
- *     Body: { name, email, message }
- *     Sends the contact form email.
+ *     Body: { name, email, subject, size?, budget?, timeline?, country? }
+ *     Sends the contact form email. `message` is accepted in place of
+ *     `subject` for any browser still running the previous script.js.
  *
  *   type: 'newsletter'
  *     Body: { type: 'newsletter', name, email }
@@ -39,6 +40,27 @@ function hasHtml(str) {
   return /[<>]/.test(str);
 }
 
+// Twins of the option values in index.html's #contact-budget / #contact-timeline.
+const BUDGET_LABELS = {
+  'under-500':  'Under AUD $500',
+  '500-1000':   'AUD $500 to $1,000',
+  '1000-2500':  'AUD $1,000 to $2,500',
+  '2500-5000':  'AUD $2,500 to $5,000',
+  'over-5000':  'Over AUD $5,000',
+  'unsure':     'Not sure yet',
+};
+const TIMELINE_LABELS = {
+  'flexible':        'Flexible',
+  'within-3-months': 'Within 3 months',
+  'within-6-months': 'Within 6 months',
+  'specific-date':   'A specific date',
+};
+
+function countryName(code) {
+  try { return new Intl.DisplayNames(['en'], { type: 'region' }).of(code); }
+  catch { return code; }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -47,8 +69,8 @@ export default async function handler(req, res) {
   const ip = getIp(req);
 
   // ── Body size limit ───────────────────────────────────────────────────
-  const size = checkBodySize(req, '5kb');
-  if (!size.ok) return res.status(413).json({ error: size.error });
+  const bodyCheck = checkBodySize(req, '5kb');
+  if (!bodyCheck.ok) return res.status(413).json({ error: bodyCheck.error });
 
   // ── CSRF check ────────────────────────────────────────────────────────
   const csrf = checkCsrf(req);
@@ -57,7 +79,8 @@ export default async function handler(req, res) {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  const { type = 'contact', name, email, message } = req.body || {};
+  const { type = 'contact', name, email, size = '', budget = '', timeline = '', country = '' } = req.body || {};
+  const message = req.body?.subject ?? req.body?.message;
   const isNewsletter = type === 'newsletter';
 
   // ── Simple in-memory rate limit (1 submission per IP per minute, per type) ─
@@ -84,10 +107,22 @@ export default async function handler(req, res) {
   // Message is only required for the contact form, not the newsletter signup
   if (!isNewsletter) {
     if (!message || typeof message !== 'string' || !message.trim()) {
-      return res.status(400).json({ error: 'Please enter a message.' });
+      return res.status(400).json({ error: 'Please enter a subject or reference painting.' });
     }
     if (hasHtml(message)) {
-      return res.status(400).json({ error: 'Message contains invalid characters.' });
+      return res.status(400).json({ error: 'Subject contains invalid characters.' });
+    }
+    if (typeof size !== 'string' || hasHtml(size)) {
+      return res.status(400).json({ error: 'Size contains invalid characters.' });
+    }
+    if (budget && !Object.hasOwn(BUDGET_LABELS, budget)) {
+      return res.status(400).json({ error: 'Please choose a budget range from the list.' });
+    }
+    if (timeline && !Object.hasOwn(TIMELINE_LABELS, timeline)) {
+      return res.status(400).json({ error: 'Please choose a timeline from the list.' });
+    }
+    if (country && (typeof country !== 'string' || !/^[A-Z]{2}$/.test(country))) {
+      return res.status(400).json({ error: 'Please choose a country from the list.' });
     }
   }
 
@@ -97,7 +132,7 @@ export default async function handler(req, res) {
     ['Email', email.trim(), 254],
   ];
   if (!isNewsletter) {
-    fieldsToCheck.push(['Message', message.trim(), 2000]);
+    fieldsToCheck.push(['Subject', message.trim(), 2000], ['Size', size.trim(), 100]);
   }
   const caps = capFields(fieldsToCheck);
   if (!caps.ok) return res.status(400).json({ error: caps.error });
@@ -106,7 +141,15 @@ export default async function handler(req, res) {
   try {
     const sent = isNewsletter
       ? await sendNewsletterSignupEmail({ name: name.trim(), email: email.trim() })
-      : await sendContactEmail({ name: name.trim(), email: email.trim(), message: message.trim() });
+      : await sendContactEmail({
+          name: name.trim(),
+          email: email.trim(),
+          message: message.trim(),
+          size: size.trim(),
+          budget: BUDGET_LABELS[budget] || '',
+          timeline: TIMELINE_LABELS[timeline] || '',
+          country: country ? countryName(country) : '',
+        });
 
     // Record the send time for rate limiting regardless of email outcome
     cooldownMap.set(ip, Date.now());

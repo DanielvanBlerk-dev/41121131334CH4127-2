@@ -190,9 +190,13 @@ export async function sendPurchaseNotification({
  * @param {object} opts
  * @param {string} opts.name    - sender's name
  * @param {string} opts.email   - sender's email
- * @param {string} opts.message - message body
+ * @param {string} opts.message - subject or reference painting
+ * @param {string} [opts.size]
+ * @param {string} [opts.budget]
+ * @param {string} [opts.timeline]
+ * @param {string} [opts.country]
  */
-export async function sendContactEmail({ name, email, message }) {
+export async function sendContactEmail({ name, email, message, size = '', budget = '', timeline = '', country = '' }) {
   const adminEmail = process.env.ADMIN_EMAIL || 'michael.p.vanblerk@gmail.com';
 
   const html = `
@@ -225,10 +229,16 @@ export async function sendContactEmail({ name, email, message }) {
           <td style="padding:6px 12px;color:#7a7368;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;">Email</td>
           <td style="padding:6px 12px;"><a href="mailto:${email}" style="color:#1a1612;">${email}</a></td>
         </tr>
+        ${[['Size', size], ['Budget', budget], ['Timeline', timeline], ['Country', country]]
+          .filter(([, value]) => value)
+          .map(([label, value]) => `<tr>
+          <td style="padding:6px 12px;color:#7a7368;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;">${label}</td>
+          <td style="padding:6px 12px;">${value}</td>
+        </tr>`).join('')}
       </table>
 
       <p style="margin:0 0 16px;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:#b8965a;border-bottom:1px solid #ede9e1;padding-bottom:8px;">
-        Message
+        Subject or reference painting
       </p>
       <div style="padding:16px;background:#f9f6f1;border:1px solid #ede9e1;line-height:1.8;white-space:pre-wrap;">${message}</div>
 

@@ -49,8 +49,15 @@ airlie-beach-art/
     ├── index.html
     ├── style.css
     ├── square-config.js          ← Square Application ID + Location ID (public values, not secret)
-    └── script.js                 ← Gallery, cart, checkout, lightbox, and admin panel logic
+    ├── script.js                 ← Gallery, cart, checkout, lightbox, and admin panel logic
+    ├── nav.js                    ← Mobile menu, shared by every page
+    └── commissions.html, shipping.html, returns.html, privacy.html
+                                  ← Static pages, served at /commissions etc. by vercel.json rewrites
 ```
+
+Listings can carry an optional limited-time label (`offerLabel` + `offerEnds`, a
+`YYYY-MM-DD` date), set in the add/edit panel. The gallery card shows it until the end of that
+day, Queensland time, then hides it. The listing itself stays on sale.
 
 ## Listing types
 

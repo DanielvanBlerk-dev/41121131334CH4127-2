@@ -21,6 +21,23 @@ function isValidString(str) {
 }
 
 /**
+ * Validates a limited-time offer label: optional, but the text and its end
+ * date (YYYY-MM-DD) must come together. A past date is allowed so an expired
+ * listing can still be edited; the storefront just stops showing the label.
+ */
+function validateOffer(label, ends) {
+  if (!label && !ends) return { ok: true, value: { offerLabel: null, offerEnds: null } };
+  if (typeof label !== 'string' || !label.trim() || /[<>]/.test(label) || label.trim().length > 80) {
+    return { ok: false, error: 'The limited-time label must be 80 characters or fewer, without < or >.' };
+  }
+  const validDate = typeof ends === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ends)
+    && !isNaN(Date.parse(ends + 'T00:00:00Z'))
+    && new Date(ends + 'T00:00:00Z').toISOString().slice(0, 10) === ends;
+  if (!validDate) return { ok: false, error: 'The limited-time label needs a valid last day.' };
+  return { ok: true, value: { offerLabel: label.trim(), offerEnds: ends } };
+}
+
+/**
  * Validates and cleans a `collections` field — a free-text array of
  * collection names a painting belongs to (Task 4: admin organisation +
  * a public filter bar, see script.js/style.css). Absent/undefined is
@@ -416,6 +433,8 @@ export default async function handler(req, res) {
         weight, length, width, height,
         gelatoPreviewUrl = null,
         stockLimit       = null,
+        offerLabel       = null,
+        offerEnds        = null,
       } = req.body || {};
 
       // ── Validate text fields ────────────────────────────────────────
@@ -434,6 +453,9 @@ export default async function handler(req, res) {
 
       const collVal = validateCollections(collections);
       if (!collVal.ok) return res.status(400).json({ success: false, error: collVal.error });
+
+      const offerVal = validateOffer(offerLabel, offerEnds);
+      if (!offerVal.ok) return res.status(400).json({ success: false, error: offerVal.error });
 
       // A Gelato print listing can't also be "oversized" — Gelato handles
       // its own shipping regardless of size, so the flag is meaningless there.
@@ -548,6 +570,7 @@ export default async function handler(req, res) {
         oversized:   isOversized,
         source,
         collections: collVal.value,
+        ...offerVal.value,
         ...gelatoFields,
         ...groupingFields,
         ...stockFields,
@@ -578,6 +601,8 @@ export default async function handler(req, res) {
         weight, length, width, height,
         gelatoPreviewUrl = null,
         stockLimit       = null,
+        offerLabel       = null,
+        offerEnds        = null,
       } = req.body || {};
 
       // ── Validate text fields ────────────────────────────────────────
@@ -593,6 +618,9 @@ export default async function handler(req, res) {
 
       const collVal = validateCollections(collections);
       if (!collVal.ok) return res.status(400).json({ success: false, error: collVal.error });
+
+      const offerVal = validateOffer(offerLabel, offerEnds);
+      if (!offerVal.ok) return res.status(400).json({ success: false, error: offerVal.error });
 
       if (!Array.isArray(removeImageUrls)) {
         return res.status(400).json({ success: false, error: 'removeImageUrls must be an array.' });
@@ -762,6 +790,7 @@ export default async function handler(req, res) {
         oversized:   isOversized,
         source,
         collections: collVal.value,
+        ...offerVal.value,
         ...gelatoFields,
         ...groupingFields,
         ...stockFields,

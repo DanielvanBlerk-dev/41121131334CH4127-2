@@ -1,54 +1,33 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
-        xmlns:xhtml="http://www.w3.org/1999/xhtml">
-
-  <!-- ── HOMEPAGE ─────────────────────────────────────────────────────── -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://airliebeachart.com/</loc>
-    <lastmod>2026-05-14</lastmod>
+    <lastmod>2026-11-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
-    <xhtml:link rel="alternate" hreflang="en-AU" href="https://airliebeachart.com/"/>
   </url>
-
-  <!-- ── SEASCAPES SECTION ─────────────────────────────────────────────── -->
   <url>
-    <loc>https://airliebeachart.com/#seascapes</loc>
-    <lastmod>2026-05-14</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <!-- ── FIGURATIVE SECTION ────────────────────────────────────────────── -->
-  <url>
-    <loc>https://airliebeachart.com/#figurative</loc>
-    <lastmod>2026-05-14</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-
-  <!-- ── ABOUT SECTION ─────────────────────────────────────────────────── -->
-  <url>
-    <loc>https://airliebeachart.com/#about</loc>
-    <lastmod>2026-05-14</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-
-  <!-- ── COMMISSIONS SECTION ───────────────────────────────────────────── -->
-  <url>
-    <loc>https://airliebeachart.com/#commissions</loc>
-    <lastmod>2026-05-14</lastmod>
+    <loc>https://airliebeachart.com/commissions</loc>
+    <lastmod>2026-11-04</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
-
-  <!-- ── CONTACT SECTION ───────────────────────────────────────────────── -->
   <url>
-    <loc>https://airliebeachart.com/#contact</loc>
-    <lastmod>2026-05-14</lastmod>
+    <loc>https://airliebeachart.com/shipping</loc>
+    <lastmod>2026-11-04</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
+    <priority>0.5</priority>
   </url>
-
+  <url>
+    <loc>https://airliebeachart.com/returns</loc>
+    <lastmod>2026-11-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://airliebeachart.com/privacy</loc>
+    <lastmod>2026-11-04</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
 </urlset>
