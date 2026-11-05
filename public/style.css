@@ -1694,30 +1694,18 @@ footer { flex-wrap: wrap; gap: 1rem 2rem; }
 }
 
 /* ─── POLICY PAGES (commissions, shipping, returns, privacy) ──────────────────
-   Long-form reading pages: serif body text at a comfortable size and measure,
-   with the mono face kept for small labels. --policy-text and --policy-label
-   are darker than --muted and --gold so small text stays easy to read. */
-.policy-page {
-  --policy-text: #4a443b;
-  --policy-label: #86662f;
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 20px; line-height: 1.6; color: var(--policy-text);
+   Headings reuse the front page's classes (.hero-title, .section-title,
+   .commission-block-title and so on), and body text copies its .hero-body
+   values, so the type matches the front page. These rules only add layout.
+   :where() keeps the body text rule weak enough for those classes to win. */
+:where(.policy-body) :where(p, li, td, .policy-callout, .policy-week-day) {
+  font-size: 14px; line-height: 1.9; color: var(--muted);
 }
 .policy-hero {
   background: var(--parchment); border-bottom: 1px solid var(--border);
   padding: 4.5rem 1.5rem 3.5rem; text-align: center;
 }
 .policy-hero-inner { max-width: 680px; margin: 0 auto; }
-.policy-eyebrow {
-  font-family: 'DM Mono', monospace; font-size: 11px;
-  letter-spacing: 0.2em; text-transform: uppercase;
-  color: var(--policy-label); margin-bottom: 1rem;
-}
-.policy-title {
-  font-size: clamp(40px, 6vw, 60px); font-weight: 300; line-height: 1.05;
-  color: var(--ink); margin-bottom: 1.1rem;
-}
-.policy-lede { font-size: clamp(21px, 2.6vw, 24px); line-height: 1.45; }
 
 .policy-body { max-width: 760px; margin: 0 auto; padding: 0 1.5rem 5rem; }
 
@@ -1727,40 +1715,35 @@ footer { flex-wrap: wrap; gap: 1rem 2rem; }
   gap: 0.75rem; margin: 2.5rem 0 0;
 }
 .policy-fact { background: #fff; border: 1px solid var(--border); padding: 1.1rem 1.15rem; }
-.policy-fact-value { display: block; font-size: 26px; line-height: 1.15; color: var(--ink); margin-bottom: 0.35rem; }
-.policy-fact-label { display: block; font-family: 'DM Mono', monospace; font-size: 11px; line-height: 1.5; letter-spacing: 0.02em; }
+.policy-fact-value { display: block; margin-bottom: 0.35rem; }
+.policy-fact-label { display: block; font-size: 11px; line-height: 1.6; color: var(--muted); }
 
 /* On this page */
 .policy-jump { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1.75rem; }
 .policy-page a.policy-jump-link {
-  font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.03em;
+  font-size: 11px; line-height: 1.6; letter-spacing: 0.03em;
   padding: 6px 14px; border: 1px solid var(--border); border-radius: 999px;
-  color: var(--policy-text); text-decoration: none; transition: all 0.2s;
+  color: var(--muted); text-decoration: none; transition: all 0.2s;
 }
 .policy-page a.policy-jump-link:hover { border-color: var(--gold); color: var(--ink); }
 
 /* Sections */
 .policy-section { padding-top: 3.25rem; }
-.policy-section h2 {
-  font-size: 34px; font-weight: 400; line-height: 1.15; color: var(--ink);
+.policy-section .section-title {
   margin-bottom: 1rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border);
 }
-.policy-section h3 {
-  font-size: 23px; font-weight: 600; line-height: 1.25; color: var(--ink);
-  margin: 1.75rem 0 0.5rem;
-}
-.policy-section h3:first-of-type { margin-top: 1.25rem; }
+.policy-section h3.commission-block-title { margin: 1.75rem 0 0.5rem; }
+.policy-section h3.commission-block-title:first-of-type { margin-top: 1.25rem; }
 .policy-page p { margin-bottom: 1rem; }
 .policy-page p:last-child { margin-bottom: 0; }
-.policy-page strong { color: var(--ink); font-weight: 600; }
 .policy-page a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; overflow-wrap: anywhere; }
-.policy-page a:hover { color: var(--policy-label); }
+.policy-page a:hover { color: var(--gold); }
 
 /* Plain lists */
 .policy-list { list-style: none; margin-bottom: 1rem; }
 .policy-list li { position: relative; padding-left: 1.35rem; margin-bottom: 0.6rem; }
 .policy-list li::before {
-  content: ''; position: absolute; left: 0; top: 0.65em;
+  content: ''; position: absolute; left: 0; top: 0.7em;
   width: 7px; height: 7px; border-radius: 50%; background: var(--gold);
 }
 
@@ -1773,34 +1756,33 @@ footer { flex-wrap: wrap; gap: 1rem 2rem; }
 .policy-steps li::before {
   content: counter(step); position: absolute; left: 0; top: 0;
   width: 2.25rem; height: 2.25rem; border-radius: 50%;
-  border: 1px solid var(--gold); background: #fff; color: var(--policy-label);
+  border: 1px solid var(--gold); background: #fff; color: var(--gold);
   display: flex; align-items: center; justify-content: center;
-  font-size: 19px; line-height: 1;
+  font-size: 12px; line-height: 1;
 }
 .policy-steps li:not(:last-child)::after {
   content: ''; position: absolute; left: calc(1.125rem - 0.5px); top: 2.25rem; bottom: 0;
   border-left: 1px solid var(--border);
 }
 .policy-steps li:last-child { padding-bottom: 0; }
-.policy-step-title { display: block; font-size: 23px; font-weight: 600; line-height: 1.3; color: var(--ink); margin-bottom: 0.15rem; }
+.policy-step-title { display: block; line-height: 1.6; margin-bottom: 0.15rem; }
 
 /* Tables */
 .policy-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--border); margin-bottom: 1rem; }
 .policy-table th, .policy-table td { text-align: left; padding: 0.8rem 1.1rem; border-bottom: 1px solid var(--border); vertical-align: top; }
 .policy-table tr:last-child td { border-bottom: none; }
 .policy-table th {
-  font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 400;
-  letter-spacing: 0.12em; text-transform: uppercase;
-  color: var(--policy-label); background: var(--parchment);
+  font-size: 10px; font-weight: 400; letter-spacing: 0.15em;
+  text-transform: uppercase; color: var(--gold); background: var(--parchment);
 }
 .policy-table td:first-child { color: var(--ink); }
 
 /* Print production week */
 .policy-week { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin: 1rem 0; }
-.policy-week-day { background: #fff; border: 1px solid var(--border); padding: 0.9rem 1rem; font-size: 18px; line-height: 1.35; }
+.policy-week-day { background: #fff; border: 1px solid var(--border); padding: 0.9rem 1rem; line-height: 1.7; }
 .policy-week-name {
-  display: block; font-family: 'DM Mono', monospace; font-size: 10px;
-  letter-spacing: 0.14em; text-transform: uppercase; color: var(--policy-label); margin-bottom: 0.35rem;
+  display: block; font-size: 10px; letter-spacing: 0.15em;
+  text-transform: uppercase; color: var(--gold); margin-bottom: 0.35rem;
 }
 
 /* Callouts */
@@ -1808,35 +1790,32 @@ footer { flex-wrap: wrap; gap: 1rem 2rem; }
   background: var(--parchment); border-left: 3px solid var(--gold);
   padding: 1.1rem 1.35rem; margin: 1.25rem 0;
 }
-.policy-callout-title { display: block; font-size: 23px; font-weight: 600; line-height: 1.3; color: var(--ink); margin-bottom: 0.25rem; }
+.policy-callout-title { display: block; line-height: 1.6; margin-bottom: 0.25rem; }
 
 /* Commission types (moved from the front page) */
 .policy-page .commissions-grid { gap: 2rem; margin: 0; }
-.policy-page .commission-block-title { font-size: 25px; margin-bottom: 0.4rem; }
-.policy-page .commission-block-body { font-size: inherit; line-height: inherit; color: inherit; }
 
 /* Closing call to action */
 .policy-end {
   text-align: center; margin-top: 3.5rem; padding: 2.5rem 1.5rem;
-  background: var(--ink); color: rgba(255,255,255,0.75);
+  background: var(--ink); color: rgba(255,255,255,0.6);
 }
-.policy-end-title { font-size: 32px; font-weight: 300; font-style: italic; color: var(--warm-white); margin-bottom: 0.5rem; }
+.policy-end .contact-form-title { line-height: 1.6; margin-bottom: 0.5rem; }
+.policy-end p:not(.contact-form-title) { color: rgba(255,255,255,0.6); }
 .policy-page .policy-end a { color: var(--warm-white); }
 .policy-page .policy-end a.policy-cta {
   display: inline-block; margin-top: 0.75rem; padding: 13px 28px;
   background: var(--gold); color: #fff; text-decoration: none;
-  font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  font-size: 11px; line-height: 1.6; letter-spacing: 0.12em; text-transform: uppercase;
   transition: background 0.2s;
 }
 .policy-page .policy-end a.policy-cta:hover { background: var(--gold-light); }
-.policy-updated { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.04em; margin-top: 2.5rem; text-align: center; }
+.policy-updated { font-size: 11px; letter-spacing: 0.04em; margin-top: 2.5rem; text-align: center; }
 
 @media (max-width: 700px) {
-  .policy-page { font-size: 19px; }
-  .policy-hero { padding: 2.75rem 1.25rem 2.5rem; }
+  .policy-hero { padding: 3rem 1.25rem 2.5rem; }
   .policy-body { padding: 0 1.25rem 3.5rem; }
   .policy-section { padding-top: 2.5rem; }
-  .policy-section h2 { font-size: 30px; }
   .policy-week { grid-template-columns: 1fr; }
   .policy-table th, .policy-table td { padding: 0.7rem 0.8rem; }
   .policy-steps li { padding-left: 3rem; }
