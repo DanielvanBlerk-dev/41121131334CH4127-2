@@ -8,6 +8,7 @@ import { checkCsrf } from './_csrf.js';
 import { checkBodySize } from './_bodyLimit.js';
 import { getImageSettings, saveImageSettings, validateImageSettings } from './_imageSettings.js';
 import { compressImage, compressToVariants } from './_imageCompress.js';
+import { getBanner, saveBanner, validateBanner } from './_banner.js';
 
 const redis = new Redis({
   url:   process.env.UPSTASH_REDIS_REST_URL,
@@ -413,6 +414,11 @@ export default async function handler(req, res) {
       if (req.query?.action === 'image-settings') {
         const settings = await getImageSettings();
         return res.status(200).json({ success: true, settings });
+      }
+
+      // Site banner editor — returns the saved banner even when switched off.
+      if (req.query?.action === 'banner') {
+        return res.status(200).json({ success: true, banner: await getBanner() });
       }
 
       const result = await fetchGelatoStoreProducts();
@@ -848,7 +854,19 @@ export default async function handler(req, res) {
         action, id, order,
         enabled, maxDimension, quality, thumbMaxDimension, thumbQuality,
         batchSize,
+        banner,
       } = req.body || {};
+
+      // ── Site banner ───────────────────────────────────────────────────
+      // Body: { action: 'update-banner', banner: {...} } — see _banner.js.
+      // Shows on the live site on the next page load, no redeploy needed.
+      if (action === 'update-banner') {
+        const validated = validateBanner(banner);
+        if (!validated.ok) return res.status(400).json({ success: false, error: validated.error });
+        await saveBanner(validated.value);
+        await auditLog({ action: 'update_banner', ip, detail: { enabled: validated.value.enabled, pages: validated.value.pages } });
+        return res.status(200).json({ success: true, banner: validated.value });
+      }
 
       // ── Update image compression settings ─────────────────────────────
       // Body: { action: 'update-image-settings', enabled, maxDimension,

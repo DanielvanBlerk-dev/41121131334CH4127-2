@@ -543,6 +543,69 @@ nav {
   color: var(--gold); margin: 1.75rem 0 0.75rem; font-weight: 600;
 }
 .image-settings-divider { border: none; border-top: 1px solid var(--border); margin: 2rem 0 0; }
+/* ─── SITE BANNER ─────────────────────────────────────────────────────────── */
+/* Restored from the October Night Sea banner; now filled by nav.js from the
+   admin's saved banner (api/_banner.js). */
+.announcement-banner {
+  background: var(--accent);
+  border-bottom: 1px solid var(--border);
+  padding: 2.25rem 3rem;
+  text-align: center;
+}
+.announcement-inner { max-width: 640px; margin: 0 auto; }
+.announcement-inner.banner-align-left   { text-align: left; }
+.announcement-inner.banner-align-center { text-align: center; }
+.announcement-inner.banner-align-right  { text-align: right; }
+.announcement-headline {
+  font-size: clamp(20px, 2.4vw, 26px);
+  font-weight: 300;
+  color: var(--gold-light);
+  margin-bottom: 0.6rem;
+}
+.announcement-body {
+  color: rgba(249,246,241,0.75);
+  line-height: 1.8; font-size: 13px;
+  margin-bottom: 1.25rem;
+}
+.announcement-note {
+  font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--gold-light);
+  margin: -0.5rem 0 1.25rem;
+}
+.announcement-inner > :last-child { margin-bottom: 0; }
+.announcement-cta {
+  display: inline-block;
+  font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink); background: var(--gold);
+  padding: 0.75rem 1.75rem; text-decoration: none;
+  border: 1px solid var(--gold); transition: all 0.2s ease;
+}
+.announcement-cta:hover { background: var(--gold-light); border-color: var(--gold-light); }
+/* Fonts the admin can pick per part. The October headline was italic
+   Cormorant, so Cormorant headlines stay italic. */
+.banner-font-cormorant   { font-family: 'Cormorant Garamond', serif; }
+.banner-font-dm-mono     { font-family: 'DM Mono', monospace; }
+.banner-font-playfair    { font-family: 'Playfair Display', serif; }
+.banner-font-lora        { font-family: 'Lora', serif; }
+.banner-font-montserrat  { font-family: 'Montserrat', sans-serif; }
+.banner-font-great-vibes { font-family: 'Great Vibes', cursive; letter-spacing: 0; text-transform: none; }
+.announcement-headline.banner-font-cormorant { font-style: italic; }
+.announcement-headline.banner-font-great-vibes { font-size: clamp(28px, 3.4vw, 36px); font-weight: 400; }
+@media (max-width: 600px) {
+  .announcement-banner { padding: 1.75rem 1.25rem; }
+}
+
+/* Site banner editor — reuses the image-settings modal above. */
+.banner-editor-box { max-width: 520px; }
+.banner-editor-box textarea {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border); background: white;
+  font-family: 'DM Mono', monospace; font-size: 13px; color: var(--ink);
+  outline: none; resize: vertical; transition: border-color 0.2s;
+}
+.banner-editor-box textarea:focus { border-color: var(--gold); }
+.form-group .banner-font-select { margin-top: 6px; font-size: 11px; padding: 6px 10px; color: var(--muted); }
+.banner-pages { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; margin-top: 4px; }
+.banner-pages .form-group-inline { margin-bottom: 8px; }
 #backfill-thumbnails-status { margin: 0.5rem 0 1rem; }
 #backfill-thumbnails-btn { width: 100%; }
 #backfill-thumbnails-btn:disabled { opacity: 0.5; cursor: default; }

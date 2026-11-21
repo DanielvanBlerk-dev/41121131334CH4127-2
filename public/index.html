@@ -140,13 +140,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 
   <!-- ── STYLES ─────────────────────────────────────────────────────────── -->
-  <link rel="stylesheet" href="style.css?v=32">
+  <link rel="stylesheet" href="style.css?v=33">
 
   <!-- ── SQUARE + APP SCRIPTS ──────────────────────────────────────────── -->
   <script src="https://web.squarecdn.com/v1/square.js" defer></script>
   <script src="square-config.js?v=6" defer></script>
-  <script src="script.js?v=31" defer></script>
-  <script src="nav.js?v=1" defer></script>
+  <script src="script.js?v=32" defer></script>
+  <script src="nav.js?v=2" defer></script>
 
   <script>
     window.va = window.va || function () {
@@ -168,6 +168,7 @@
       <button class="admin-btn" id="admin-orders-btn">Orders</button>
       <button class="admin-btn" id="admin-analytics-btn">Analytics</button>
       <button class="admin-btn" id="admin-image-settings-btn">Image settings</button>
+      <button class="admin-btn" id="admin-banner-btn">Banner</button>
       <button class="admin-btn" id="admin-add-btn">+ Add painting</button>
       <button class="admin-btn danger" id="admin-logout-btn">Log out</button>
     </div>
@@ -821,6 +822,78 @@
       <p class="field-helper">Photos uploaded before thumbnails existed are still served at full size in the gallery grid. Click below to generate thumbnails for them retroactively — this is what actually brings your existing Data Transfer usage down, not just future uploads. Safe to run more than once; already-thumbnailed photos are skipped.</p>
       <p class="image-settings-sub" id="backfill-thumbnails-status" role="status"></p>
       <button class="login-btn" id="backfill-thumbnails-btn" type="button">Regenerate thumbnails for existing photos</button>
+    </div>
+  </div>
+
+  <!--
+    ── SITE BANNER EDITOR (admin) ──────────────────────────────────────────
+    Edits the announcement banner (see api/_banner.js). Every text part is
+    optional; a blank one is hidden. Font pickers are filled by script.js
+    from BANNER_FONT_OPTIONS. Saved via PATCH /api/paintings
+    { action: 'update-banner' } and live on the next page load.
+  -->
+  <div class="image-settings-overlay" id="banner-overlay" role="dialog" aria-modal="true" aria-label="Site banner">
+    <div class="image-settings-box banner-editor-box">
+      <h2 class="image-settings-title">Site banner</h2>
+      <p class="image-settings-sub">A dark announcement band in the same style as the October Night Sea banner. On the front page it sits between the featured painting and the gallery; on other pages, under the page heading. Leave any part blank to hide it.</p>
+
+      <div class="form-group-inline">
+        <input type="checkbox" id="banner-enabled">
+        <label for="banner-enabled" class="checkbox-label">Show the banner</label>
+      </div>
+
+      <p class="image-settings-section-label">Text</p>
+      <div class="form-group">
+        <label for="banner-headline">Headline</label>
+        <input type="text" id="banner-headline" maxlength="120" placeholder="e.g. Black Friday: free shipping">
+        <select id="banner-font-headline" class="banner-font-select" aria-label="Headline font"></select>
+      </div>
+      <div class="form-group">
+        <label for="banner-body">Paragraph</label>
+        <textarea id="banner-body" rows="3" maxlength="600" placeholder="A sentence or two about the announcement"></textarea>
+        <select id="banner-font-body" class="banner-font-select" aria-label="Paragraph font"></select>
+      </div>
+      <div class="form-group">
+        <label for="banner-note">Note</label>
+        <input type="text" id="banner-note" maxlength="120" placeholder="e.g. Ends Monday 30 November">
+        <select id="banner-font-note" class="banner-font-select" aria-label="Note font"></select>
+      </div>
+      <div class="form-group">
+        <label for="banner-button-label">Button text</label>
+        <input type="text" id="banner-button-label" maxlength="40" placeholder="e.g. View the collection">
+        <select id="banner-font-button" class="banner-font-select" aria-label="Button font"></select>
+      </div>
+      <div class="form-group">
+        <label for="banner-button-link">Button link</label>
+        <input type="text" id="banner-button-link" maxlength="300" placeholder="/#gallery">
+        <p class="field-helper">/#gallery for the gallery, /commissions for a page, or a full https:// address.</p>
+      </div>
+
+      <p class="image-settings-section-label">Text alignment</p>
+      <div class="listing-type-group" role="radiogroup" aria-label="Text alignment">
+        <label class="listing-type-option"><input type="radio" name="banner-align" value="left"><span class="checkbox-label">Left</span></label>
+        <label class="listing-type-option"><input type="radio" name="banner-align" value="center" checked><span class="checkbox-label">Centre</span></label>
+        <label class="listing-type-option"><input type="radio" name="banner-align" value="right"><span class="checkbox-label">Right</span></label>
+      </div>
+
+      <p class="image-settings-section-label">Show on</p>
+      <div class="form-group-inline">
+        <input type="checkbox" id="banner-page-all">
+        <label for="banner-page-all" class="checkbox-label">All pages</label>
+      </div>
+      <div class="banner-pages">
+        <label class="form-group-inline"><input type="checkbox" class="banner-page" value="home"><span class="checkbox-label">Front page</span></label>
+        <label class="form-group-inline"><input type="checkbox" class="banner-page" value="commissions"><span class="checkbox-label">Commissions</span></label>
+        <label class="form-group-inline"><input type="checkbox" class="banner-page" value="shipping"><span class="checkbox-label">Shipping</span></label>
+        <label class="form-group-inline"><input type="checkbox" class="banner-page" value="returns"><span class="checkbox-label">Returns</span></label>
+        <label class="form-group-inline"><input type="checkbox" class="banner-page" value="privacy"><span class="checkbox-label">Privacy</span></label>
+      </div>
+
+      <p class="image-settings-error" id="banner-error" role="alert"></p>
+      <p class="image-settings-success" id="banner-success" role="status"></p>
+
+      <button class="login-btn" id="banner-save-btn">Save banner</button>
+      <button class="login-cancel" id="banner-close-btn">Close</button>
     </div>
   </div>
 

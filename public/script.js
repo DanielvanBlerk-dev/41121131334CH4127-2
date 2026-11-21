@@ -221,6 +221,9 @@ async function loadArtworks() {
     artworks    = Array.isArray(data.artworks) ? data.artworks : [];
     artistPhoto = data.artistPhoto || null;
     renderArtistPhoto();
+    // Site banner (nav.js). Never allowed to affect the gallery.
+    try { if (typeof renderSiteBanner === 'function') renderSiteBanner(data.banner || null); }
+    catch (err) { console.warn('Banner render failed:', err); }
   } catch (e) {
     console.error('Failed to load artworks:', e);
     if (artworks.length === 0) artworks = [];
@@ -1646,6 +1649,107 @@ function closeOrders() {
   document.body.style.overflow = '';
 }
 
+/* ─── SITE BANNER EDITOR (admin) ──────────────────────────────────────────── */
+// Keys must match BANNER_FONTS in api/_banner.js.
+const BANNER_FONT_OPTIONS = [
+  ['cormorant',   'Cormorant Garamond (site headings)'],
+  ['dm-mono',     'DM Mono (site text)'],
+  ['playfair',    'Playfair Display'],
+  ['lora',        'Lora'],
+  ['montserrat',  'Montserrat'],
+  ['great-vibes', 'Great Vibes (script)'],
+];
+const BANNER_PARTS = ['headline', 'body', 'note', 'button'];
+
+function fillBannerFontSelects() {
+  BANNER_PARTS.forEach(part => {
+    const select = el('banner-font-' + part);
+    if (!select || select.options.length) return;
+    BANNER_FONT_OPTIONS.forEach(([value, label]) => {
+      const opt = document.createElement('option'); opt.value = value; opt.textContent = label;
+      select.appendChild(opt);
+    });
+  });
+}
+
+function bannerPageBoxes() { return Array.from(document.querySelectorAll('.banner-page')); }
+function syncBannerAllPages() {
+  el('banner-page-all').checked = bannerPageBoxes().every(b => b.checked);
+}
+
+async function openBannerPanel() {
+  fillBannerFontSelects();
+  el('banner-overlay').classList.add('open');
+  el('banner-error').textContent = ''; el('banner-success').textContent = '';
+  try {
+    const data = await apiFetch('/api/paintings?action=banner');
+    const b = data.banner || {};
+    el('banner-enabled').checked     = b.enabled === true;
+    el('banner-headline').value      = b.headline    || '';
+    el('banner-body').value          = b.body        || '';
+    el('banner-note').value          = b.note        || '';
+    el('banner-button-label').value  = b.buttonLabel || '';
+    el('banner-button-link').value   = b.buttonLink  || '';
+    BANNER_PARTS.forEach(part => {
+      if (b.fonts && b.fonts[part]) el('banner-font-' + part).value = b.fonts[part];
+    });
+    const align = document.querySelector('input[name="banner-align"][value="' + (b.align || 'center') + '"]');
+    if (align) align.checked = true;
+    const pages = Array.isArray(b.pages) ? b.pages : ['home'];
+    bannerPageBoxes().forEach(box => { box.checked = pages.includes(box.value); });
+    syncBannerAllPages();
+  } catch (e) {
+    el('banner-error').textContent = e.message || 'Could not load the banner.';
+  }
+}
+function closeBannerPanel() { el('banner-overlay').classList.remove('open'); }
+
+async function saveBannerFromPanel() {
+  const errEl = el('banner-error'), okEl = el('banner-success'), btn = el('banner-save-btn');
+  errEl.textContent = ''; okEl.textContent = '';
+
+  const banner = {
+    enabled:     el('banner-enabled').checked,
+    headline:    el('banner-headline').value.trim(),
+    body:        el('banner-body').value.trim(),
+    note:        el('banner-note').value.trim(),
+    buttonLabel: el('banner-button-label').value.trim(),
+    buttonLink:  el('banner-button-link').value.trim(),
+    align:       (document.querySelector('input[name="banner-align"]:checked') || {}).value || 'center',
+    fonts:       {},
+    pages:       bannerPageBoxes().filter(b => b.checked).map(b => b.value),
+  };
+  BANNER_PARTS.forEach(part => { banner.fonts[part] = el('banner-font-' + part).value; });
+
+  // Same rules as validateBanner() in api/_banner.js, checked here first
+  // so the message appears without a round trip.
+  const texts = [banner.headline, banner.body, banner.note, banner.buttonLabel, banner.buttonLink];
+  if (texts.some(hasHtml)) { errEl.textContent = 'Banner text cannot contain < or >.'; return; }
+  if (banner.buttonLabel && !banner.buttonLink) { errEl.textContent = 'Please add where the button links to, or clear the button text.'; return; }
+  if (banner.buttonLink && !banner.buttonLabel) { errEl.textContent = 'Please add the button text, or clear the button link.'; return; }
+  if (banner.buttonLink && !/^(\/(?!\/)|#|https:\/\/)\S*$/.test(banner.buttonLink)) {
+    errEl.textContent = 'Button link must start with /, # or https://.'; return;
+  }
+  if (banner.enabled && !banner.headline && !banner.body && !banner.note && !banner.buttonLabel) {
+    errEl.textContent = 'Add some banner text before switching it on.'; return;
+  }
+  if (banner.enabled && banner.pages.length === 0) { errEl.textContent = 'Tick at least one page to show the banner on.'; return; }
+
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const data = await apiFetch('/api/paintings', {
+      method: 'PATCH',
+      body: JSON.stringify({ action: 'update-banner', banner }),
+    });
+    okEl.textContent = banner.enabled ? 'Saved. The banner is live.' : 'Saved. The banner is switched off.';
+    if (typeof renderSiteBanner === 'function') renderSiteBanner(data.banner && data.banner.enabled ? data.banner : null);
+  } catch (e) {
+    errEl.textContent = e.message || 'Could not save the banner.';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save banner';
+  }
+}
+
 /* ─── IMAGE SETTINGS PANEL ────────────────────────────────────────────────── */
 /**
  * Opens the Image Settings modal and loads the admin's current
@@ -2804,6 +2908,15 @@ document.addEventListener('DOMContentLoaded', function() {
   wire('admin-image-settings-btn', 'click', openImageSettingsPanel);
   wire('image-settings-close-btn', 'click', closeImageSettingsPanel);
   wire('image-settings-save-btn',  'click', saveImageSettingsFromPanel);
+  // Site banner editor (admin)
+  wire('admin-banner-btn', 'click', openBannerPanel);
+  wire('banner-close-btn', 'click', closeBannerPanel);
+  wire('banner-save-btn',  'click', saveBannerFromPanel);
+  wire('banner-page-all',  'change', () => {
+    const all = el('banner-page-all').checked;
+    bannerPageBoxes().forEach(box => { box.checked = all; });
+  });
+  bannerPageBoxes().forEach(box => box.addEventListener('change', syncBannerAllPages));
   wire('backfill-thumbnails-btn',  'click', runBackfillThumbnails);
   wire('artist-photo-upload-btn','click', function() { el('artist-photo-file').click(); });
   wire('artist-photo-file',      'change', handleArtistPhotoUpload);

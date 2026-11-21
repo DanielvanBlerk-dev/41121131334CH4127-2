@@ -1,4 +1,5 @@
 import { Redis } from '@upstash/redis';
+import { getPublicBanner } from './_banner.js';
 
 const redis = new Redis({
   url:   process.env.UPSTASH_REDIS_REST_URL,
@@ -109,6 +110,13 @@ export default async function handler(req, res) {
   // Set CORS headers on every GET response
   setCorsHeaders(res);
 
+  // The other pages only need the banner (nav.js asks with ?only=banner).
+  // null when switched off, and never allowed to break the gallery.
+  const banner = await getPublicBanner().catch(() => null);
+  if (req.query?.only === 'banner') {
+    return res.status(200).json({ banner });
+  }
+
   try {
     let artworks = await redis.get('artworks');
     if (!artworks || artworks.length === 0) {
@@ -125,7 +133,7 @@ export default async function handler(req, res) {
     const artistPhotoLegacy = !artistPhotoUrl ? (await redis.get('artist-photo') || null) : null;
     const artistPhoto       = artistPhotoUrl || artistPhotoLegacy;
 
-    return res.status(200).json({ artworks: artworksClean, artistPhoto });
+    return res.status(200).json({ artworks: artworksClean, artistPhoto, banner });
 
   } catch (err) {
     console.error('get-artworks error:', err);
@@ -133,6 +141,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       artworks:    DEFAULT_ARTWORKS.map(normaliseArtwork),
       artistPhoto: null,
+      banner,
     });
   }
 }

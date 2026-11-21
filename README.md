@@ -81,6 +81,13 @@ out of the postage quote, and adds no postage to the charge for any destination.
 `create-payment.js` reads the flag from Redis, never from the browser. Packed dimensions are
 still required, so postage applies again as soon as the box is unticked.
 
+**Site banner:** the admin bar's **Banner** button edits an announcement band (headline,
+paragraph, note and button, each optional, with a font per part, left/centre/right alignment,
+and per-page tick boxes). It is stored in Redis (`api/_banner.js`), saved through
+`PATCH /api/paintings { action: 'update-banner' }`, and served with `/api/get-artworks`
+(`?only=banner` for the other pages). `nav.js` draws it between the hero and the gallery on the
+front page and under the page heading elsewhere. No redeploy is needed to change it.
+
 ## Image pipeline
 
 Every photo uploaded through the admin panel (manual upload or a Gelato preview import) is
