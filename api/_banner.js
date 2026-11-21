@@ -52,6 +52,8 @@ function cleanText(value, max, label) {
 }
 
 function isSafeLink(link) {
+  // Browsers read a backslash as a slash, so "/\evil.com" would leave the site.
+  if (/[\\\s]/.test(link)) return false;
   if (link.startsWith('/')) return !link.startsWith('//') && !/\s/.test(link);
   if (link.startsWith('#')) return !/\s/.test(link);
   try {
@@ -76,7 +78,7 @@ export function validateBanner(input) {
   if (out.buttonLabel && !out.buttonLink) return { ok: false, error: 'Please add where the button links to, or clear the button text.' };
   if (out.buttonLink && !out.buttonLabel) return { ok: false, error: 'Please add the button text, or clear the button link.' };
   if (out.buttonLink && !isSafeLink(out.buttonLink)) {
-    return { ok: false, error: 'Button link must start with /, # or https://.' };
+    return { ok: false, error: 'Button link must start with /, # or https://, with no spaces or backslashes.' };
   }
 
   out.align = ALIGNS.includes(b.align) ? b.align : 'center';

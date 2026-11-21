@@ -84,7 +84,8 @@
     if (banner.headline) inner.appendChild(part('p', 'announcement-headline', banner.headline, fonts.headline));
     if (banner.body)     inner.appendChild(part('p', 'announcement-body', banner.body, fonts.body));
     if (banner.note)     inner.appendChild(part('p', 'announcement-note', banner.note, fonts.note));
-    if (banner.buttonLabel && /^(\/(?!\/)|#|https:\/\/)/.test(banner.buttonLink || '')) {
+    // No backslashes: browsers read "/\x.com" as "//x.com", another site.
+    if (banner.buttonLabel && /^(\/(?!\/)|#|https:\/\/)[^\\\s]*$/.test(banner.buttonLink || '')) {
       var a = part('a', 'announcement-cta', banner.buttonLabel, fonts.button);
       a.href = banner.buttonLink;
       if (/^https:\/\//.test(banner.buttonLink)) { a.target = '_blank'; a.rel = 'noopener'; }

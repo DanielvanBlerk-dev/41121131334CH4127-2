@@ -1727,8 +1727,8 @@ async function saveBannerFromPanel() {
   if (texts.some(hasHtml)) { errEl.textContent = 'Banner text cannot contain < or >.'; return; }
   if (banner.buttonLabel && !banner.buttonLink) { errEl.textContent = 'Please add where the button links to, or clear the button text.'; return; }
   if (banner.buttonLink && !banner.buttonLabel) { errEl.textContent = 'Please add the button text, or clear the button link.'; return; }
-  if (banner.buttonLink && !/^(\/(?!\/)|#|https:\/\/)\S*$/.test(banner.buttonLink)) {
-    errEl.textContent = 'Button link must start with /, # or https://.'; return;
+  if (banner.buttonLink && !/^(\/(?!\/)|#|https:\/\/)[^\\\s]*$/.test(banner.buttonLink)) {
+    errEl.textContent = 'Button link must start with /, # or https://, with no spaces or backslashes.'; return;
   }
   if (banner.enabled && !banner.headline && !banner.body && !banner.note && !banner.buttonLabel) {
     errEl.textContent = 'Add some banner text before switching it on.'; return;
