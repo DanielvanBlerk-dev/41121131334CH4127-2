@@ -595,6 +595,28 @@ nav {
   .announcement-banner { padding: 1.75rem 1.25rem; }
 }
 
+/* ─── IN-APP BROWSER HINT ─────────────────────────────────────────────────── */
+/* Slim bar along the bottom (nav.js), above the sticky nav but below every
+   overlay, so it never covers a panel or popup. */
+.inapp-hint {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 150;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  background: var(--accent); color: rgba(249,246,241,0.85);
+  border-top: 1px solid rgba(212,176,122,0.35);
+  font-family: 'DM Mono', monospace; font-size: 11px; line-height: 1.5;
+  animation: inapp-hint-in 0.3s ease;
+}
+.inapp-hint-text { margin: 0; flex: 1; }
+.inapp-hint-close {
+  flex: 0 0 auto; background: none; border: none; cursor: pointer;
+  color: var(--gold-light); font-size: 14px; padding: 6px; line-height: 1;
+}
+@keyframes inapp-hint-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+/* One line in checkout above the payment buttons (script.js). */
+.inapp-pay-hint { font-size: 11px; color: var(--muted); line-height: 1.6; margin: 0 0 10px; }
+.inapp-pay-hint.hidden { display: none; }
+
 /* Site banner editor — reuses the image-settings modal above. */
 .banner-editor-box { max-width: 520px; }
 .banner-editor-box textarea {

@@ -27,6 +27,58 @@
   });
 })();
 
+/* In-app browser hint — a slim bar at the bottom of the screen, shown once
+   per visitor, only inside Messenger, Facebook or Instagram. It suggests
+   opening the site in the phone's own browser (where Google Pay / Apple Pay
+   open properly) but never moves anyone. Matches only those apps' clear
+   markers, so a wrong match costs at most one closable bar. */
+window.inAppBrowserInfo = function () {
+  var ua = navigator.userAgent || '';
+  var os = /Android/i.test(ua) ? 'android' : (/iPhone|iPad|iPod/i.test(ua) ? 'ios' : null);
+  if (!os) return null;
+  var app = /Orca-Android|MessengerForiOS|MessengerLite/i.test(ua) ? 'Messenger'
+          : /Instagram/i.test(ua) ? 'Instagram'
+          : /FBAN|FBAV|FB_IAB/i.test(ua) ? 'Facebook'
+          : null;
+  return app ? { app: app, os: os } : null;
+};
+
+(function () {
+  var info = window.inAppBrowserInfo();
+  if (!info) return;
+  var KEY = 'inapp_hint_seen';
+  try { if (localStorage.getItem(KEY)) return; } catch (e) { /* storage blocked: still show once per page */ }
+
+  function anyModalOpen() {
+    return !!document.querySelector('.newsletter-overlay.open, .modal-overlay.open, .cart-panel.open, .login-overlay.open');
+  }
+
+  function show() {
+    if (anyModalOpen()) { setTimeout(show, 3000); return; }
+    try { localStorage.setItem(KEY, '1'); } catch (e) {}
+
+    var bar = document.createElement('div');
+    bar.className = 'inapp-hint';
+    bar.setAttribute('role', 'status');
+    var text = document.createElement('p');
+    text.className = 'inapp-hint-text';
+    text.textContent = info.os === 'android'
+      ? 'Viewing in ' + info.app + '? Payments like Google Pay work best in Chrome. Tap ⋮ then Open in Chrome.'
+      : 'Viewing in ' + info.app + '? Payments like Apple Pay work best in Safari. Tap ··· then open in Safari.';
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'inapp-hint-close';
+    close.setAttribute('aria-label', 'Close');
+    close.textContent = '✕';
+    close.addEventListener('click', function () { bar.parentNode && bar.parentNode.removeChild(bar); });
+    bar.appendChild(text);
+    bar.appendChild(close);
+    document.body.appendChild(bar);
+  }
+
+  setTimeout(show, 2000);
+})();
+
 /* Site banner — the announcement Michael edits from the admin bar (see
    api/_banner.js). Same look and place as the October Night Sea banner:
    between the featured painting and the gallery on the front page, under

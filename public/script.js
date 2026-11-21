@@ -1625,7 +1625,22 @@ async function openCheckout() {
   el('success-state').style.display = 'none';
   updateGelatoPostageVisibility();
   updatePostageSectionForCountry();
+  updateInAppPayHint();
   if (!squareCard) await initSquare();
+}
+
+/* One grey line above the payment buttons, only inside Messenger / Facebook /
+   Instagram (inAppBrowserInfo is in nav.js). Suggests the phone's browser for
+   wallet payments without moving anyone; card payment is unaffected. */
+function updateInAppPayHint() {
+  const hint = el('inapp-pay-hint');
+  if (!hint) return;
+  const info = typeof inAppBrowserInfo === 'function' ? inAppBrowserInfo() : null;
+  if (!info) { hint.classList.add('hidden'); return; }
+  hint.textContent = info.os === 'android'
+    ? 'Paying with Google Pay? It opens directly in Chrome. Card payment works here as normal.'
+    : 'Paying with Apple Pay? It works in Safari. Card payment works here as normal.';
+  hint.classList.remove('hidden');
 }
 function closeCheckout() {
   el('checkout-modal').classList.remove('open');
