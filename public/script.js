@@ -2554,6 +2554,49 @@ async function initSquare() {
   try { await initWallets(); } catch (e) { console.warn('Wallet init skipped:', e); }
 }
 
+/* ─── GOOGLE PAY HANDOFF TO CHROME (Android in-app browsers) ──────────────── */
+/* Inside Messenger / Facebook / Instagram on Android, Google only offers its
+   web sign-in flow, not the Google Pay app (only the host app can enable
+   that). So there the Google Pay button instead reopens this checkout in
+   Chrome with the same cart, where Google Pay opens the app. Card payment is
+   unchanged. The link carries listing ids only, never personal details. */
+function isAndroidInAppBrowser() {
+  const ua = navigator.userAgent || '';
+  return /Android/i.test(ua) && (/; wv\)/.test(ua) || /FBAN|FBAV|FB_IAB|Instagram|Messenger/i.test(ua));
+}
+
+function chromeHandoffUrl() {
+  const ids  = cart.map(a => Number(a.id)).filter(Number.isFinite);
+  const path = '/?handoff=checkout&cart=' + ids.join(',');
+  const fallback = 'https://' + location.host + path;   // if Chrome isn't installed
+  return 'intent://' + location.host + path +
+    '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=' + encodeURIComponent(fallback) + ';end';
+}
+
+function openCheckoutInChrome(e) {
+  e.preventDefault();
+  e.stopPropagation();   // capture phase: Google's own button never sees the tap
+  if (cart.length === 0) return;
+  location.href = chromeHandoffUrl();
+}
+
+/**
+ * Chrome side of the handoff: fills the cart from ?handoff=checkout&cart=…
+ * and tidies the address bar. Returns true when checkout should open.
+ * Sold, oversized or unknown ids are dropped, and the server re-checks
+ * everything at payment anyway.
+ */
+function applyCheckoutHandoff() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('handoff') !== 'checkout') return false;
+  history.replaceState(null, '', location.pathname + location.hash);
+  const ids = (params.get('cart') || '').split(',').slice(0, 20).map(Number).filter(Number.isFinite);
+  const items = artworks.filter(a => ids.includes(Number(a.id)) && !a.sold && !a.oversized);
+  items.forEach(a => { if (!inCart(a.id)) cart.push(a); });
+  saveCart();
+  return cart.length > 0;
+}
+
 /* ─── DIGITAL WALLETS (Apple Pay / Google Pay) ────────────────────────────── */
 let walletPaymentRequest = null;
 let walletApplePay       = null;
@@ -2606,7 +2649,9 @@ async function initWallets() {
     await walletGooglePay.attach('#google-pay-button', { buttonColor: 'black', buttonType: 'pay', buttonSizeMode: 'fill' });
     const box = el('google-pay-button');
     box.classList.remove('hidden');
-    box.addEventListener('click', e => handleWalletPayment(e, walletGooglePay), true);
+    // In an Android app browser, hand off to Chrome instead (see above).
+    if (isAndroidInAppBrowser()) box.addEventListener('click', openCheckoutInChrome, true);
+    else box.addEventListener('click', e => handleWalletPayment(e, walletGooglePay), true);
     anyWallet = true;
   } catch (e) { walletGooglePay = null; console.info('Google Pay not available:', e && e.message); }
 
@@ -2983,6 +3028,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function run() {
       loadArtworks().then(function() {
         restoreCart();
+        let handoff = false;
+        try { handoff = applyCheckoutHandoff(); } catch(e) { console.error('checkout handoff failed:', e); }
         try { renderGallery(); } catch(e) {
           console.error('renderGallery failed:', e);
           ['gallery-grid'].forEach(function(id) {
@@ -2993,6 +3040,8 @@ document.addEventListener('DOMContentLoaded', function() {
         try { updateCartUI(); } catch(e) { console.error('updateCartUI failed:', e); }
         // The policy pages' Cart link lands here as /#cart
         try { if (location.hash === '#cart' && cart.length > 0) openCart(); } catch(e) { console.error('openCart failed:', e); }
+        // Arrived from an app browser's Google Pay button: straight to checkout.
+        try { if (handoff) openCheckout(); } catch(e) { console.error('openCheckout after handoff failed:', e); }
         try { if (isLoggedIn()) activateAdminMode(); } catch(e) { console.error('activateAdminMode failed:', e); }
         try { scheduleNewsletterPopup(); } catch(e) { console.error('scheduleNewsletterPopup failed:', e); }
       }).catch(function(e) {
