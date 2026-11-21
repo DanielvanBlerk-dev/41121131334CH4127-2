@@ -145,7 +145,7 @@
   <!-- ── SQUARE + APP SCRIPTS ──────────────────────────────────────────── -->
   <script src="https://web.squarecdn.com/v1/square.js" defer></script>
   <script src="square-config.js?v=6" defer></script>
-  <script src="script.js?v=30" defer></script>
+  <script src="script.js?v=31" defer></script>
   <script src="nav.js?v=1" defer></script>
 
   <script>
@@ -1082,6 +1082,13 @@
             <input type="number" id="new-height" placeholder="8" min="1">
           </div>
         </div>
+        <!-- Free shipping: lives inside this block so it shows only for the
+             listing types Michael posts himself (Original, Original Print). -->
+        <div class="form-group-inline">
+          <input type="checkbox" id="new-free-shipping">
+          <label for="new-free-shipping" class="checkbox-label">Free shipping</label>
+        </div>
+        <p class="field-helper">Buyers pay no postage for this work, in Australia or overseas. Untick to charge postage again.</p>
       </div>
 
       <div class="form-group-inline">

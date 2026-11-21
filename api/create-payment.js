@@ -52,14 +52,19 @@ function isValidPostcode(str, countryCode) {
  * for (see the stockSold/stockLimit check just below, and how they're
  * updated after payment succeeds, further down this file). Neither can be
  * bypassed by the client.
+ *
+ * Free shipping: a listing Michael ticked "Free shipping" adds no shipping
+ * source to any destination, so it needs no postage quote and adds nothing
+ * to the charge. The flag is read from Redis here, never from the client.
  */
 async function computeExpectedAmount(items) {
   if (!Array.isArray(items) || items.length === 0) {
-    return { amountCents: 0, sources: new Set(), artworksById: new Map() };
+    return { amountCents: 0, sources: new Set(), artworksById: new Map(), freeShippingIds: new Set() };
   }
   const artworks     = (await redis.get('artworks')) || [];
   const artworksById = new Map();
   const sources      = new Set();
+  const freeShippingIds = new Set();
   let total = 0;
 
   for (const item of items) {
@@ -74,11 +79,13 @@ async function computeExpectedAmount(items) {
       throw new Error(`Artwork "${art.title}" is sold out`);
     }
     total += art.price;
-    sources.add(art.source === 'gelato' ? 'gelato' : 'auspost');
+    const shipsFree = art.freeShipping === true && art.source !== 'gelato' && !art.oversized;
+    if (shipsFree) freeShippingIds.add(Number(art.id));
+    else sources.add(art.source === 'gelato' ? 'gelato' : 'auspost');
     artworksById.set(Number(art.id), art);
   }
 
-  return { amountCents: Math.round(total * 100), sources, artworksById };
+  return { amountCents: Math.round(total * 100), sources, artworksById, freeShippingIds };
 }
  
 /**
@@ -250,7 +257,9 @@ async function sendGelatoFailureAlert({ orderId, items, customer, shippingAddres
  *   source doesn't match a domain actually present in the cart is ignored,
  *   and a domain that IS present but has no matching quote blocks payment —
  *   this prevents a buyer paying only AusPost postage while a print item
- *   silently rides along for free, or vice versa.
+ *   silently rides along for free, or vice versa. Items Michael marked
+ *   "Free shipping" don't count as a domain (any destination), so a cart
+ *   of only those sends no quote IDs at all.
  * - Audit logged (IP, items, order ID — never card data)
  */
 export default async function handler(req, res) {
@@ -316,12 +325,13 @@ export default async function handler(req, res) {
   }
  
   // ── Compute amount + cart composition server-side — never trust the client ──
-  let expectedArtworkCents, cartSources, artworksById;
+  let expectedArtworkCents, cartSources, artworksById, freeShippingIds;
   try {
     const result = await computeExpectedAmount(items);
     expectedArtworkCents = result.amountCents;
-    cartSources          = result.sources;      // Set containing 'auspost' and/or 'gelato'
+    cartSources          = result.sources;      // Set of 'auspost' / 'gelato' that still need postage
     artworksById         = result.artworksById;
+    freeShippingIds      = result.freeShippingIds;
   } catch (err) {
     await auditLog({ action: 'payment_rejected', ip, detail: { reason: err.message } });
     return res.status(400).json({ success: false, error: err.message });
@@ -353,8 +363,10 @@ export default async function handler(req, res) {
     quoteIdList = [];
   }
  
+  // No quote at all is fine only when every item ships free (cartSources is
+  // empty); otherwise the per-source checks below would reject it anyway.
   if (
-    quoteIdList.length === 0 ||
+    (quoteIdList.length === 0 && cartSources.size > 0) ||
     quoteIdList.length > 2 ||
     !quoteIdList.every(id => typeof id === 'string' && id.length > 0 && id.length <= 64)
   ) {
@@ -402,7 +414,15 @@ export default async function handler(req, res) {
   }
  
   const postageAmount = usableQuotes.reduce((sum, q) => sum + q.price, 0);
-  const postageName   = usableQuotes.map(q => q.name).join(' + ') || 'Postage';
+  // Names what Michael's email and the orders panel show, e.g. "Parcel Post
+  // + Free shipping on 1 item", or just "Free shipping" when nothing was paid.
+  const postageNames  = usableQuotes.map(q => q.name);
+  if (freeShippingIds.size > 0) {
+    postageNames.push(freeShippingIds.size === items.length
+      ? 'Free shipping'
+      : `Free shipping on ${freeShippingIds.size} item${freeShippingIds.size === 1 ? '' : 's'}`);
+  }
+  const postageName   = postageNames.join(' + ') || 'Postage';
   const gelatoQuote    = usableQuotes.find(q => q.source === 'gelato') || null;
  
   // ── Length caps ───────────────────────────────────────────────────────
@@ -518,6 +538,7 @@ export default async function handler(req, res) {
         amountCents:  expectedAmountCents,
         postageName,
         postageCents,
+        freeShippingCount: freeShippingIds.size,
         hasGelatoItems: cartSources.has('gelato'),
       },
     });
@@ -540,6 +561,7 @@ export default async function handler(req, res) {
         price:  a.price,
         source: a.source === 'gelato' ? 'gelato' : a.source === 'original-print' ? 'original-print' : 'original',
         variantLabel: a.variantLabel || null,
+        freeShipping: freeShippingIds.has(Number(a.id)),
       })),
       customer: { firstName, lastName, email, phone: phone || '' },
       shipping: { address, city, state, postcode, country },

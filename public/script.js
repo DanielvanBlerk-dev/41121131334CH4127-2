@@ -456,6 +456,13 @@ function renderCardContent(card, group) {
     card.appendChild(offerEl);
   }
 
+  if (shipsFree(art) && !art.sold) {
+    const freeEl = document.createElement('div');
+    freeEl.className = 'artwork-offer';
+    freeEl.textContent = 'Free shipping';
+    card.appendChild(freeEl);
+  }
+
   // Remaining-stock note — Original Print listings only, and only while
   // still available (once sold out the "Sold" overlay/button already say
   // enough, per art.sold — driven by stockSold/stockLimit server-side).
@@ -665,8 +672,17 @@ function inCart(id) { return cart.some(i => i.id === id); }
  */
 function getCartSources() {
   const sources = new Set();
-  cart.forEach(a => sources.add(a && a.source === 'gelato' ? 'gelato' : 'auspost'));
+  cart.forEach(a => { if (a && !shipsFree(a)) sources.add(a.source === 'gelato' ? 'gelato' : 'auspost'); });
   return sources;
+}
+
+/**
+ * True for a listing Michael marked "Free shipping". Mirrors the server
+ * rule in create-payment.js: it needs no postage quote to any destination,
+ * so getCartSources() leaves it out and checkout never asks to quote it.
+ */
+function shipsFree(a) {
+  return !!a && a.freeShipping === true && a.source !== 'gelato' && !a.oversized;
 }
 
 /* ─── DRAG-AND-DROP REORDERING (admin only) ───────────────────────────────── */
@@ -1021,6 +1037,7 @@ function openAddPanel() {
   });
   el('new-category').value    = 'seascape';
   el('new-sold').checked      = false;
+  el('new-free-shipping').checked = false;
   el('offer-status-note').textContent = 'The label disappears by itself after this date. The listing stays on sale.';
   el('listing-type-original').checked = true;
   el('add-error').textContent = '';
@@ -1061,6 +1078,7 @@ function openEditPanel(art) {
   el('new-price').value    = art.price != null ? art.price : '';
   el('new-category').value = art.category === 'figurative' ? 'figurative' : 'seascape';
   el('new-sold').checked   = !!art.sold;
+  el('new-free-shipping').checked = art.freeShipping === true;
   el('add-error').textContent = '';
   el('new-offer-label').value = art.offerLabel || '';
   el('new-offer-ends').value  = art.offerEnds  || '';
@@ -1306,6 +1324,9 @@ async function saveNewPainting() {
 
   const body = {
     title, medium, price, category, sold, oversized,
+    // Only sent as true for listing types that show the tick box; the
+    // server applies the same rule (paintings.js shipsFree).
+    freeShipping: !oversized && !isGelato && el('new-free-shipping').checked,
     offerLabel: offerLabel || null,
     offerEnds:  offerEnds  || null,
     source: isGelato ? 'gelato' : isOriginalPrint ? 'original-print' : 'original',
@@ -1487,7 +1508,12 @@ function updateCartUI() {
       const metaEl    = document.createElement('div'); metaEl.className = 'cart-item-meta'; metaEl.textContent = art.medium;
       const removeBtn = document.createElement('button'); removeBtn.className = 'remove-item'; removeBtn.textContent = 'Remove';
       removeBtn.addEventListener('click', () => removeFromCart(art.id));
-      info.appendChild(nameEl); info.appendChild(metaEl); info.appendChild(removeBtn);
+      info.appendChild(nameEl); info.appendChild(metaEl);
+      if (shipsFree(art)) {
+        const freeEl = document.createElement('div'); freeEl.className = 'artwork-offer'; freeEl.textContent = 'Free shipping';
+        info.appendChild(freeEl);
+      }
+      info.appendChild(removeBtn);
 
       const priceEl = document.createElement('div'); priceEl.className = 'cart-item-price';
       priceEl.textContent = 'AUD $' + art.price.toLocaleString(); priceEl.appendChild(usdSpan(art.price));
@@ -1556,6 +1582,18 @@ function buildOrderSummary() {
 
   if (sources.has('auspost')) appendPostageLine(summaryEl, selectedPostage, 'Standard Postage (select below)');
   if (sources.has('gelato'))  appendPostageLine(summaryEl, selectedGelatoPostage, 'Print Shipping (select below)');
+
+  const freeCount = cart.filter(shipsFree).length;
+  if (freeCount > 0) {
+    const row = document.createElement('div'); row.className = 'order-line';
+    const label = document.createElement('span');
+    label.textContent = freeCount === cart.length
+      ? 'Shipping'
+      : 'Free shipping on ' + freeCount + ' item' + (freeCount === 1 ? '' : 's');
+    const price = document.createElement('span'); price.textContent = 'Free';
+    row.appendChild(label); row.appendChild(price);
+    summaryEl.appendChild(row);
+  }
 
   const totalRow = document.createElement('div'); totalRow.className = 'order-line total';
   totalRow.innerHTML = '<strong>Total</strong><strong>AUD $' + grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '<span class="price-usd">' + usdApprox(grandTotal) + '</span></strong>';
@@ -1918,7 +1956,9 @@ function updatePostageSectionForCountry() {
 
   const intro = el('postage-intro');
   if (intro) {
-    intro.textContent = isIntl
+    intro.textContent = (cart.length > 0 && cart.every(shipsFree))
+      ? 'Shipping is free for this order.'
+      : isIntl
       ? 'Postage to ' + name + ' is calculated automatically from Australia Post international rates.'
       : 'Shipping options appear automatically once you enter your postcode in the shipping address above.';
   }
@@ -2091,8 +2131,14 @@ async function calculatePostage(opts) {
   const resultEl       = el('postage-result');
   const gelatoResultEl = el('gelato-postage-result');
 
-  const auspostItems    = cart.filter(a => a.source !== 'gelato');
+  // Free-shipping items are never quoted; if nothing else needs postage,
+  // there's nothing to fetch (the order summary already shows "Free").
+  const auspostItems    = cart.filter(a => a.source !== 'gelato' && !shipsFree(a));
   const gelatoCartItems = cart.filter(a => a.source === 'gelato');
+  if (auspostItems.length === 0 && gelatoCartItems.length === 0) {
+    resultEl.innerHTML = '';
+    return;
+  }
 
   // ── Domestic: postcode required (only when the cart has non-Gelato items) ─
   // Read straight from the shipping-address postcode field (#postcode) —

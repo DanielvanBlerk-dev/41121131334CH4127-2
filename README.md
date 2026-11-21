@@ -75,6 +75,12 @@ one size, each size saved as its own listing (own price, stock, and photos) shar
 `printGroupId`. The gallery combines every listing with the same `printGroupId` into one card
 with a size picker, showing whichever size's price/stock/photos are currently selected.
 
+**Free shipping:** Original and Original Print listings have a "Free shipping" tick box
+(`freeShipping`). A ticked listing is tagged "Free shipping" in the gallery and cart, is left
+out of the postage quote, and adds no postage to the charge for any destination.
+`create-payment.js` reads the flag from Redis, never from the browser. Packed dimensions are
+still required, so postage applies again as soon as the box is unticked.
+
 ## Image pipeline
 
 Every photo uploaded through the admin panel (manual upload or a Gelato preview import) is

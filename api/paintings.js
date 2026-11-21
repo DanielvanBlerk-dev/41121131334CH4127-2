@@ -340,6 +340,11 @@ async function fetchGelatoStoreProducts() {
  *                                                 a standard listing, but with a fixed
  *                                                 `stockLimit`. See stock fields below.
  *
+ * freeShipping — admin tick box. When true, the listing ships free to any
+ *                destination (create-payment.js charges no postage for it,
+ *                in Australia or overseas). Only meaningful for AusPost-shipped listings, so it is always
+ *                saved false for Gelato and Oversized listings.
+ *
  * Original Print stock fields:
  *   stockLimit — admin-set total copies available for this listing (positive
  *                integer). Required, and editable later (raising the run size,
@@ -435,6 +440,7 @@ export default async function handler(req, res) {
         stockLimit       = null,
         offerLabel       = null,
         offerEnds        = null,
+        freeShipping     = false,
       } = req.body || {};
 
       // ── Validate text fields ────────────────────────────────────────
@@ -460,6 +466,8 @@ export default async function handler(req, res) {
       // A Gelato print listing can't also be "oversized" — Gelato handles
       // its own shipping regardless of size, so the flag is meaningless there.
       const isOversized = source === 'gelato' ? false : Boolean(oversized);
+      // Free shipping only applies to listings Michael posts himself.
+      const shipsFree = freeShipping === true && !isOversized && source !== 'gelato';
 
       // ── Gelato-specific fields ──────────────────────────────────────
       let gelatoFields = { gelatoProductUid: null };
@@ -568,6 +576,7 @@ export default async function handler(req, res) {
         price,
         sold:        Boolean(sold),
         oversized:   isOversized,
+        freeShipping: shipsFree,
         source,
         collections: collVal.value,
         ...offerVal.value,
@@ -582,7 +591,7 @@ export default async function handler(req, res) {
         shipping,
       });
       await redis.set('artworks', artworks);
-      await auditLog({ action: 'add_painting', ip, detail: { id, title: sanitizeString(title), price, source, oversized: isOversized, stockLimit: stockFields.stockLimit, printGroupId: groupingFields.printGroupId, importedGelatoImage: !!importedImageUrl } });
+      await auditLog({ action: 'add_painting', ip, detail: { id, title: sanitizeString(title), price, source, oversized: isOversized, freeShipping: shipsFree, stockLimit: stockFields.stockLimit, printGroupId: groupingFields.printGroupId, importedGelatoImage: !!importedImageUrl } });
 
       return res.status(200).json({ success: true, id, ...(importWarning ? { imageImportWarning: importWarning } : {}) });
     }
@@ -603,6 +612,7 @@ export default async function handler(req, res) {
         stockLimit       = null,
         offerLabel       = null,
         offerEnds        = null,
+        freeShipping     = false,
       } = req.body || {};
 
       // ── Validate text fields ────────────────────────────────────────
@@ -627,6 +637,8 @@ export default async function handler(req, res) {
       }
 
       const isOversized = source === 'gelato' ? false : Boolean(oversized);
+      // Same rule as POST. Always written below, so unticking it sticks.
+      const shipsFree = freeShipping === true && !isOversized && source !== 'gelato';
 
       // ── Gelato-specific fields ──────────────────────────────────────
       let gelatoFields = { gelatoProductUid: null };
@@ -788,6 +800,7 @@ export default async function handler(req, res) {
         // can't be reopened just by raising stockLimit back down again.
         sold:        source === 'original-print' ? (Boolean(sold) || autoSoldOut) : Boolean(sold),
         oversized:   isOversized,
+        freeShipping: shipsFree,
         source,
         collections: collVal.value,
         ...offerVal.value,
@@ -802,7 +815,7 @@ export default async function handler(req, res) {
       };
 
       await redis.set('artworks', artworks);
-      await auditLog({ action: 'update_painting', ip, detail: { id: numId, title: sanitizeString(title), price, source, stockLimit: stockFields.stockLimit, imageCount: currentImages.length } });
+      await auditLog({ action: 'update_painting', ip, detail: { id: numId, title: sanitizeString(title), price, source, freeShipping: shipsFree, stockLimit: stockFields.stockLimit, imageCount: currentImages.length } });
       return res.status(200).json({ success: true, ...(importWarning ? { imageImportWarning: importWarning } : {}) });
     }
 
