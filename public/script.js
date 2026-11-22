@@ -84,6 +84,8 @@ let squarePayments  = null;
 let selectedPostage = null;        // AusPost quote — { name, price, quoteId } | null
 let selectedGelatoPostage = null;  // Gelato print-shipping quote — { name, price, quoteId } | null
 let artistPhoto     = null;
+// Active site-wide free-shipping offer from /api/get-artworks (null if none).
+let freeShippingRule = null;
 
 // Grouped-listing (Gelato size variants) state — maps printGroupId -> the
 // artwork id of whichever size pill is currently "active" for that card.
@@ -220,6 +222,7 @@ async function loadArtworks() {
     const data  = await apiFetch('/api/get-artworks');
     artworks    = Array.isArray(data.artworks) ? data.artworks : [];
     artistPhoto = data.artistPhoto || null;
+    freeShippingRule = data.freeShippingRule || null;
     renderArtistPhoto();
     // Site banner (nav.js). Never allowed to affect the gallery.
     try { if (typeof renderSiteBanner === 'function') renderSiteBanner(data.banner || null); }
@@ -675,7 +678,7 @@ function inCart(id) { return cart.some(i => i.id === id); }
  */
 function getCartSources() {
   const sources = new Set();
-  cart.forEach(a => { if (a && !shipsFree(a)) sources.add(a.source === 'gelato' ? 'gelato' : 'auspost'); });
+  cart.forEach(a => { if (a && !shipsFreeInCart(a)) sources.add(a.source === 'gelato' ? 'gelato' : 'auspost'); });
   return sources;
 }
 
@@ -686,6 +689,70 @@ function getCartSources() {
  */
 function shipsFree(a) {
   return !!a && a.freeShipping === true && a.source !== 'gelato' && !a.oversized;
+}
+
+/* ── Site-wide free-shipping offer (admin setting, api/_freeShipping.js) ──
+   Mirrors ruleIsActive() / ruleQualifies() there. The server makes the
+   final call at payment; this only decides what the cart and checkout show. */
+function offerIsActive(rule) {
+  if (!rule) return false;
+  const now = Date.now();
+  if (rule.startDate && now < Date.parse(rule.startDate + 'T00:00:00+10:00')) return false;
+  if (rule.endDate && now > Date.parse(rule.endDate + 'T23:59:59.999+10:00')) return false;
+  return true;
+}
+
+/** How far the cart is from the offer: { qualifies, moreTotal, moreItems }. */
+function offerProgress() {
+  const rule = freeShippingRule;
+  if (!offerIsActive(rule)) return null;
+  const subtotal  = cart.reduce((s, a) => s + a.price, 0);
+  const itemCount = new Set(cart.map(a => a.id)).size;
+  const hasTotal = typeof rule.minTotal === 'number', hasItems = typeof rule.minItems === 'number';
+  const qualifies = (!hasTotal && !hasItems) ||
+    (hasTotal && subtotal >= rule.minTotal) || (hasItems && itemCount >= rule.minItems);
+  return {
+    qualifies,
+    moreTotal: hasTotal ? Math.max(0, rule.minTotal - subtotal) : null,
+    moreItems: hasItems ? Math.max(0, rule.minItems - itemCount) : null,
+  };
+}
+
+/** True when this order's destination and contents earn the offer. */
+function offerAppliesToCart(countryCode) {
+  const p = offerProgress();
+  if (!p || !p.qualifies) return false;
+  return freeShippingRule.scope === 'worldwide' || countryCode === 'AU';
+}
+
+/** Whether an item in the cart ships free: its own tick box, or the offer. */
+function shipsFreeInCart(a) {
+  if (!a || a.source === 'gelato' || a.oversized) return false;
+  return a.freeShipping === true || offerAppliesToCart(getSelectedCountry().code);
+}
+
+/** The cart's progress line, e.g. "Add AUD $40 more for free shipping". */
+function renderCartOfferLine() {
+  const line = el('cart-free-shipping');
+  if (!line) return;
+  const p = offerProgress();
+  // Hide when there's no offer, or the cart only holds items the offer never
+  // covers (Gelato prints), so the line can't promise something untrue.
+  const covered = a => a.source !== 'gelato' && !a.oversized;
+  if (!p || (cart.length > 0 && !cart.some(covered))) { line.classList.add('hidden'); return; }
+  const where = freeShippingRule.scope === 'worldwide' ? '' : ' within Australia';
+  let text;
+  if (p.qualifies) {
+    text = cart.length > 0 ? 'Your order ships free' + where + '.' : 'Free shipping on every order' + where + '.';
+  } else {
+    const parts = [];
+    if (p.moreTotal !== null) parts.push('AUD $' + (p.moreTotal % 1 ? p.moreTotal.toFixed(2) : p.moreTotal.toLocaleString()) + ' more');
+    if (p.moreItems !== null) parts.push(p.moreItems + ' more item' + (p.moreItems === 1 ? '' : 's'));
+    text = 'Add ' + parts.join(' or ') + ' for free shipping' + where + '.';
+  }
+  line.textContent = text;
+  line.classList.toggle('qualified', p.qualifies && cart.length > 0);
+  line.classList.remove('hidden');
 }
 
 /* ─── DRAG-AND-DROP REORDERING (admin only) ───────────────────────────────── */
@@ -1474,6 +1541,7 @@ function restoreCart() {
 
 function updateCartUI() {
   saveCart();
+  try { renderCartOfferLine(); } catch (e) { console.warn('offer line failed:', e); }
   try {
     const count = cart.length;
     el('cart-count').textContent = count;
@@ -1586,7 +1654,7 @@ function buildOrderSummary() {
   if (sources.has('auspost')) appendPostageLine(summaryEl, selectedPostage, 'Standard Postage (select below)');
   if (sources.has('gelato'))  appendPostageLine(summaryEl, selectedGelatoPostage, 'Print Shipping (select below)');
 
-  const freeCount = cart.filter(shipsFree).length;
+  const freeCount = cart.filter(shipsFreeInCart).length;
   if (freeCount > 0) {
     const row = document.createElement('div'); row.className = 'order-line';
     const label = document.createElement('span');
@@ -1762,6 +1830,70 @@ async function saveBannerFromPanel() {
     errEl.textContent = e.message || 'Could not save the banner.';
   } finally {
     btn.disabled = false; btn.textContent = 'Save banner';
+  }
+}
+
+/* ─── FREE SHIPPING OFFER EDITOR (admin) ──────────────────────────────────── */
+/* Plain-English state of a saved offer, using the same Queensland-time days
+   as api/_freeShipping.js ruleIsActive(). */
+function freeShippingStatusText(rule) {
+  if (!rule || !rule.enabled) return 'Currently off.';
+  const now = Date.now();
+  const fmt = d => new Date(d + 'T00:00:00+10:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Australia/Brisbane' });
+  if (rule.startDate && now < Date.parse(rule.startDate + 'T00:00:00+10:00')) return 'Scheduled: starts ' + fmt(rule.startDate) + '.';
+  if (rule.endDate && now > Date.parse(rule.endDate + 'T23:59:59.999+10:00')) return 'Ended ' + fmt(rule.endDate) + '. Untick or change the dates.';
+  return 'Live now' + (rule.endDate ? ', until the end of ' + fmt(rule.endDate) : '') + '.';
+}
+
+async function openFreeShippingPanel() {
+  el('free-shipping-overlay').classList.add('open');
+  el('free-shipping-error').textContent = ''; el('free-shipping-success').textContent = '';
+  try {
+    const data = await apiFetch('/api/paintings?action=free-shipping');
+    const r = data.rule || {};
+    el('free-shipping-enabled').checked  = r.enabled === true;
+    el('free-shipping-min-total').value  = r.minTotal != null ? r.minTotal : '';
+    el('free-shipping-min-items').value  = r.minItems != null ? r.minItems : '';
+    el('free-shipping-start').value      = r.startDate || '';
+    el('free-shipping-end').value        = r.endDate   || '';
+    const scope = document.querySelector('input[name="free-shipping-scope"][value="' + (r.scope === 'worldwide' ? 'worldwide' : 'au') + '"]');
+    if (scope) scope.checked = true;
+    el('free-shipping-status').textContent = freeShippingStatusText(r);
+  } catch (e) {
+    el('free-shipping-error').textContent = e.message || 'Could not load the free shipping offer.';
+  }
+}
+function closeFreeShippingPanel() { el('free-shipping-overlay').classList.remove('open'); }
+
+async function saveFreeShippingFromPanel() {
+  const errEl = el('free-shipping-error'), okEl = el('free-shipping-success'), btn = el('free-shipping-save-btn');
+  errEl.textContent = ''; okEl.textContent = '';
+  const rule = {
+    enabled:   el('free-shipping-enabled').checked,
+    minTotal:  el('free-shipping-min-total').value.trim(),
+    minItems:  el('free-shipping-min-items').value.trim(),
+    scope:     (document.querySelector('input[name="free-shipping-scope"]:checked') || {}).value || 'au',
+    startDate: el('free-shipping-start').value,
+    endDate:   el('free-shipping-end').value,
+  };
+  // Same rules as validateRule() in api/_freeShipping.js, checked here first.
+  if (rule.minTotal && !(Number(rule.minTotal) >= 1)) { errEl.textContent = 'Cart total must be 1 or more, or blank.'; return; }
+  if (rule.minItems && !(Number.isInteger(Number(rule.minItems)) && Number(rule.minItems) >= 1)) { errEl.textContent = 'Number of items must be a whole number, 1 or more, or blank.'; return; }
+  if (rule.startDate && rule.endDate && rule.endDate < rule.startDate) { errEl.textContent = 'The Until date must be on or after the From date.'; return; }
+
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const data = await apiFetch('/api/paintings', {
+      method: 'PATCH',
+      body: JSON.stringify({ action: 'update-free-shipping', freeShippingRule: rule }),
+    });
+    el('free-shipping-status').textContent = freeShippingStatusText(data.rule);
+    okEl.textContent = 'Saved.';
+    await loadArtworks(); updateCartUI();   // refresh the cart's progress line
+  } catch (e) {
+    errEl.textContent = e.message || 'Could not save the free shipping offer.';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save offer';
   }
 }
 
@@ -2075,7 +2207,7 @@ function updatePostageSectionForCountry() {
 
   const intro = el('postage-intro');
   if (intro) {
-    intro.textContent = (cart.length > 0 && cart.every(shipsFree))
+    intro.textContent = (cart.length > 0 && cart.every(shipsFreeInCart))
       ? 'Shipping is free for this order.'
       : isIntl
       ? 'Postage to ' + name + ' is calculated automatically from Australia Post international rates.'
@@ -2252,7 +2384,7 @@ async function calculatePostage(opts) {
 
   // Free-shipping items are never quoted; if nothing else needs postage,
   // there's nothing to fetch (the order summary already shows "Free").
-  const auspostItems    = cart.filter(a => a.source !== 'gelato' && !shipsFree(a));
+  const auspostItems    = cart.filter(a => a.source !== 'gelato' && !shipsFreeInCart(a));
   const gelatoCartItems = cart.filter(a => a.source === 'gelato');
   if (auspostItems.length === 0 && gelatoCartItems.length === 0) {
     resultEl.innerHTML = '';
@@ -2923,6 +3055,10 @@ document.addEventListener('DOMContentLoaded', function() {
   wire('admin-image-settings-btn', 'click', openImageSettingsPanel);
   wire('image-settings-close-btn', 'click', closeImageSettingsPanel);
   wire('image-settings-save-btn',  'click', saveImageSettingsFromPanel);
+  // Free shipping offer editor (admin)
+  wire('admin-free-shipping-btn', 'click', openFreeShippingPanel);
+  wire('free-shipping-close-btn', 'click', closeFreeShippingPanel);
+  wire('free-shipping-save-btn',  'click', saveFreeShippingFromPanel);
   // Site banner editor (admin)
   wire('admin-banner-btn', 'click', openBannerPanel);
   wire('banner-close-btn', 'click', closeBannerPanel);

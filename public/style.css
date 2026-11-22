@@ -613,6 +613,13 @@ nav {
   color: var(--gold-light); font-size: 14px; padding: 6px; line-height: 1;
 }
 @keyframes inapp-hint-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
+/* Free-shipping offer progress line in the cart footer (script.js). */
+.cart-free-shipping {
+  font-size: 11px; letter-spacing: 0.04em; line-height: 1.6; color: var(--gold);
+  margin: 0 0 12px; padding: 8px 10px; border: 1px solid rgba(184,150,90,0.35);
+}
+.cart-free-shipping.qualified { color: var(--warm-white); background: var(--accent); border-color: var(--accent); }
+.cart-free-shipping.hidden { display: none; }
 /* One line in checkout above the payment buttons (script.js). */
 .inapp-pay-hint { font-size: 11px; color: var(--muted); line-height: 1.6; margin: 0 0 10px; }
 .inapp-pay-hint.hidden { display: none; }
@@ -626,6 +633,7 @@ nav {
 }
 .banner-editor-box textarea:focus { border-color: var(--gold); }
 .form-group .banner-font-select { margin-top: 6px; font-size: 11px; padding: 6px 10px; color: var(--muted); }
+.free-shipping-status { font-size: 11px; color: var(--gold); letter-spacing: 0.04em; margin: -0.5rem 0 1.25rem; }
 .banner-pages { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; margin-top: 4px; }
 .banner-pages .form-group-inline { margin-bottom: 8px; }
 #backfill-thumbnails-status { margin: 0.5rem 0 1rem; }

@@ -1,5 +1,6 @@
 import { Redis } from '@upstash/redis';
 import { getPublicBanner } from './_banner.js';
+import { getPublicRule } from './_freeShipping.js';
 
 const redis = new Redis({
   url:   process.env.UPSTASH_REDIS_REST_URL,
@@ -133,7 +134,9 @@ export default async function handler(req, res) {
     const artistPhotoLegacy = !artistPhotoUrl ? (await redis.get('artist-photo') || null) : null;
     const artistPhoto       = artistPhotoUrl || artistPhotoLegacy;
 
-    return res.status(200).json({ artworks: artworksClean, artistPhoto, banner });
+    // Active free-shipping offer, for the cart's progress line (null if none).
+    const freeShippingRule = await getPublicRule().catch(() => null);
+    return res.status(200).json({ artworks: artworksClean, artistPhoto, banner, freeShippingRule });
 
   } catch (err) {
     console.error('get-artworks error:', err);

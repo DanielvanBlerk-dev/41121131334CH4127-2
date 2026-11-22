@@ -5,6 +5,7 @@ import { checkCsrf } from './_csrf.js';
 import { checkBodySize } from './_bodyLimit.js';
 import { capFields } from './_sanitize.js';
 import { sendEmail, sendPurchaseNotification } from './_sendEmail.js';
+import { getRule, ruleQualifies } from './_freeShipping.js';
  
 const redis = new Redis({
   url:   process.env.UPSTASH_REDIS_REST_URL,
@@ -56,8 +57,10 @@ function isValidPostcode(str, countryCode) {
  * Free shipping: a listing Michael ticked "Free shipping" adds no shipping
  * source to any destination, so it needs no postage quote and adds nothing
  * to the charge. The flag is read from Redis here, never from the client.
+ * The same applies to every Michael-posted item when the site-wide offer
+ * (_freeShipping.js) is active and this order qualifies.
  */
-async function computeExpectedAmount(items) {
+async function computeExpectedAmount(items, destinationCountryCode) {
   if (!Array.isArray(items) || items.length === 0) {
     return { amountCents: 0, sources: new Set(), artworksById: new Map(), freeShippingIds: new Set() };
   }
@@ -79,13 +82,28 @@ async function computeExpectedAmount(items) {
       throw new Error(`Artwork "${art.title}" is sold out`);
     }
     total += art.price;
-    const shipsFree = art.freeShipping === true && art.source !== 'gelato' && !art.oversized;
-    if (shipsFree) freeShippingIds.add(Number(art.id));
-    else sources.add(art.source === 'gelato' ? 'gelato' : 'auspost');
     artworksById.set(Number(art.id), art);
   }
 
-  return { amountCents: Math.round(total * 100), sources, artworksById, freeShippingIds };
+  // Site-wide free-shipping offer (admin setting, _freeShipping.js): judged
+  // on the server's own total and the number of distinct listings, so a
+  // repeated id can't count twice toward the item minimum.
+  const rule = await getRule();
+  const offerApplies = ruleQualifies(rule, {
+    subtotal:    total,
+    itemCount:   artworksById.size,
+    countryCode: destinationCountryCode,
+  });
+
+  for (const item of items) {
+    const art = artworksById.get(Number(item.id));
+    const postedByMichael = art.source !== 'gelato' && !art.oversized;
+    const shipsFree = postedByMichael && (art.freeShipping === true || offerApplies);
+    if (shipsFree) freeShippingIds.add(Number(art.id));
+    else sources.add(art.source === 'gelato' ? 'gelato' : 'auspost');
+  }
+
+  return { amountCents: Math.round(total * 100), sources, artworksById, freeShippingIds, offerApplies };
 }
  
 /**
@@ -327,7 +345,7 @@ export default async function handler(req, res) {
   // ── Compute amount + cart composition server-side — never trust the client ──
   let expectedArtworkCents, cartSources, artworksById, freeShippingIds;
   try {
-    const result = await computeExpectedAmount(items);
+    const result = await computeExpectedAmount(items, normalisedCountryCode);
     expectedArtworkCents = result.amountCents;
     cartSources          = result.sources;      // Set of 'auspost' / 'gelato' that still need postage
     artworksById         = result.artworksById;

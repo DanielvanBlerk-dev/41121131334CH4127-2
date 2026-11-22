@@ -9,6 +9,7 @@ import { checkBodySize } from './_bodyLimit.js';
 import { getImageSettings, saveImageSettings, validateImageSettings } from './_imageSettings.js';
 import { compressImage, compressToVariants } from './_imageCompress.js';
 import { getBanner, saveBanner, validateBanner } from './_banner.js';
+import { getRule, saveRule, validateRule } from './_freeShipping.js';
 
 const redis = new Redis({
   url:   process.env.UPSTASH_REDIS_REST_URL,
@@ -419,6 +420,11 @@ export default async function handler(req, res) {
       // Site banner editor — returns the saved banner even when switched off.
       if (req.query?.action === 'banner') {
         return res.status(200).json({ success: true, banner: await getBanner() });
+      }
+
+      // Free-shipping offer editor — the saved rule, even when switched off.
+      if (req.query?.action === 'free-shipping') {
+        return res.status(200).json({ success: true, rule: await getRule() });
       }
 
       const result = await fetchGelatoStoreProducts();
@@ -855,7 +861,19 @@ export default async function handler(req, res) {
         enabled, maxDimension, quality, thumbMaxDimension, thumbQuality,
         batchSize,
         banner,
+        freeShippingRule,
       } = req.body || {};
+
+      // ── Site-wide free-shipping offer ─────────────────────────────────
+      // Body: { action: 'update-free-shipping', freeShippingRule: {...} } —
+      // see _freeShipping.js. Applies to the next payment, no redeploy.
+      if (action === 'update-free-shipping') {
+        const validated = validateRule(freeShippingRule);
+        if (!validated.ok) return res.status(400).json({ success: false, error: validated.error });
+        await saveRule(validated.value);
+        await auditLog({ action: 'update_free_shipping', ip, detail: validated.value });
+        return res.status(200).json({ success: true, rule: validated.value });
+      }
 
       // ── Site banner ───────────────────────────────────────────────────
       // Body: { action: 'update-banner', banner: {...} } — see _banner.js.

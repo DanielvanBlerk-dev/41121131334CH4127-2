@@ -81,6 +81,13 @@ out of the postage quote, and adds no postage to the charge for any destination.
 `create-payment.js` reads the flag from Redis, never from the browser. Packed dimensions are
 still required, so postage applies again as soon as the box is unticked.
 
+**Free shipping offer:** the admin bar's **Free shipping** button sets a site-wide offer
+(`api/_freeShipping.js`): a minimum cart total and/or number of items (either qualifies; both
+blank means every order), Australia-only or worldwide, and optional start/end dates on
+Queensland time. `create-payment.js` decides from Redis and its own totals whether an order
+qualifies; if it does, every Original and Original Print ships free (Gelato and Oversized never
+do). The cart shows a progress line ("Add AUD $40 more for free shipping").
+
 **Site banner:** the admin bar's **Banner** button edits an announcement band (headline,
 paragraph, note and button, each optional, with a font per part, left/centre/right alignment,
 and per-page tick boxes). It is stored in Redis (`api/_banner.js`), saved through

@@ -140,12 +140,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
 
   <!-- ── STYLES ─────────────────────────────────────────────────────────── -->
-  <link rel="stylesheet" href="style.css?v=34">
+  <link rel="stylesheet" href="style.css?v=35">
 
   <!-- ── SQUARE + APP SCRIPTS ──────────────────────────────────────────── -->
   <script src="https://web.squarecdn.com/v1/square.js" defer></script>
   <script src="square-config.js?v=6" defer></script>
-  <script src="script.js?v=35" defer></script>
+  <script src="script.js?v=36" defer></script>
   <script src="nav.js?v=4" defer></script>
 
   <script>
@@ -169,6 +169,7 @@
       <button class="admin-btn" id="admin-analytics-btn">Analytics</button>
       <button class="admin-btn" id="admin-image-settings-btn">Image settings</button>
       <button class="admin-btn" id="admin-banner-btn">Banner</button>
+      <button class="admin-btn" id="admin-free-shipping-btn">Free shipping</button>
       <button class="admin-btn" id="admin-add-btn">+ Add painting</button>
       <button class="admin-btn danger" id="admin-logout-btn">Log out</button>
     </div>
@@ -414,6 +415,8 @@
       <div class="cart-empty" id="cart-empty">No works selected yet.</div>
     </div>
     <div class="cart-footer">
+      <!-- Free-shipping offer progress (renderCartOfferLine), hidden when no offer is on. -->
+      <p class="cart-free-shipping hidden" id="cart-free-shipping" role="status"></p>
       <div class="cart-total">
         <span class="cart-total-label">Total</span>
         <span class="cart-total-amount" id="cart-total">AUD $0</span>
@@ -896,6 +899,63 @@
 
       <button class="login-btn" id="banner-save-btn">Save banner</button>
       <button class="login-cancel" id="banner-close-btn">Close</button>
+    </div>
+  </div>
+
+  <!--
+    ── FREE SHIPPING OFFER EDITOR (admin) ──────────────────────────────────
+    Site-wide free shipping (see api/_freeShipping.js). Saved via PATCH
+    /api/paintings { action: 'update-free-shipping' }; the server decides
+    at payment whether each order qualifies.
+  -->
+  <div class="image-settings-overlay" id="free-shipping-overlay" role="dialog" aria-modal="true" aria-label="Free shipping offer">
+    <div class="image-settings-box banner-editor-box">
+      <h2 class="image-settings-title">Free shipping offer</h2>
+      <p class="image-settings-sub">Makes postage free on qualifying orders for every Original and Original Print in the cart. Gelato prints and Oversized works always keep their own shipping. Listings with their own Free shipping tick box ship free regardless.</p>
+      <p class="free-shipping-status" id="free-shipping-status" role="status"></p>
+
+      <div class="form-group-inline">
+        <input type="checkbox" id="free-shipping-enabled">
+        <label for="free-shipping-enabled" class="checkbox-label">Offer free shipping</label>
+      </div>
+
+      <p class="image-settings-section-label">Who qualifies</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="free-shipping-min-total">Cart total of (AUD)</label>
+          <input type="number" id="free-shipping-min-total" min="1" step="1" placeholder="e.g. 150">
+        </div>
+        <div class="form-group">
+          <label for="free-shipping-min-items">Or this many items</label>
+          <input type="number" id="free-shipping-min-items" min="1" step="1" placeholder="e.g. 3">
+        </div>
+      </div>
+      <p class="field-helper">Either one qualifies the order. Leave one blank to use just the other, or both blank to make every order ship free.</p>
+
+      <p class="image-settings-section-label">Where</p>
+      <div class="listing-type-group" role="radiogroup" aria-label="Where the offer applies">
+        <label class="listing-type-option"><input type="radio" name="free-shipping-scope" value="au" checked><span class="checkbox-label">Australia only</span></label>
+        <label class="listing-type-option"><input type="radio" name="free-shipping-scope" value="worldwide"><span class="checkbox-label">Worldwide</span></label>
+      </div>
+
+      <p class="image-settings-section-label">Dates (optional)</p>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="free-shipping-start">From</label>
+          <input type="date" id="free-shipping-start">
+        </div>
+        <div class="form-group">
+          <label for="free-shipping-end">Until</label>
+          <input type="date" id="free-shipping-end">
+        </div>
+      </div>
+      <p class="field-helper">Whole days on Queensland time: it starts at 12:00 am on the first day and ends at 11:59 pm on the last. Leave blank to run until you switch it off.</p>
+
+      <p class="image-settings-error" id="free-shipping-error" role="alert"></p>
+      <p class="image-settings-success" id="free-shipping-success" role="status"></p>
+
+      <button class="login-btn" id="free-shipping-save-btn">Save offer</button>
+      <button class="login-cancel" id="free-shipping-close-btn">Close</button>
     </div>
   </div>
 
